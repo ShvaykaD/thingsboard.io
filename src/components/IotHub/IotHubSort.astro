@@ -26,10 +26,19 @@ import IotHubIcon from './IotHubIcon.astro';
 interface Props {
 	/** Initial selection id; defaults to `'most-installed'`. */
 	initialSortId?: string;
+	/**
+	 * Offer "Most Relevant". Only the grouped surfaces (`/iot-hub/search/`, the
+	 * creator profile) do: there, the control switches to relevance on its own
+	 * while the search field has text, so the option has to be in the list for
+	 * the client to be able to select it. A single-type page ranks one kind of
+	 * thing and keeps the three orderings it has always had.
+	 */
+	showRelevance?: boolean;
 }
 
-const { initialSortId = DEFAULT_IOT_HUB_SORT_ID } = Astro.props;
+const { initialSortId = DEFAULT_IOT_HUB_SORT_ID, showRelevance = false } = Astro.props;
 const initial = getIotHubSortOption(initialSortId);
+const options = IOT_HUB_SORT_OPTIONS.filter((opt) => showRelevance || opt.id !== 'most-relevant');
 ---
 
 <div
@@ -53,7 +62,7 @@ const initial = getIotHubSortOption(initialSortId);
 		role="group"
 		aria-label="Sort order"
 	>
-		{IOT_HUB_SORT_OPTIONS.map((opt) => (
+		{options.map((opt) => (
 			<button
 				class:list={[
 					'iot-hub-sort__option',

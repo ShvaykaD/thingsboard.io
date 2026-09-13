@@ -2,18 +2,21 @@
 import type { GetStaticPaths } from 'astro';
 import { getCollection } from 'astro:content';
 import {
+	GROUPED_SECTION_SIZE,
 	IOT_HUB_API_URL,
 	IOT_HUB_CATEGORIES,
 	IOT_HUB_STRINGS,
 	CREATOR_PAGE_SIZE,
 	creatorViewSchema,
 	isNumericSlug,
-	type GridEntry,
+	type IotHubItemType,
+	type ListingView,
 	resolveAvatar,
 	type CreatorView,
 } from '@models/iot-hub';
 import BaseLayout from '@layouts/BaseLayout.astro';
-import FlatResultsPanel from '@components/IotHub/FlatResultsPanel.astro';
+import GroupedResultsPanel from '@components/IotHub/GroupedResultsPanel.astro';
+import { toSections, type GroupedSection } from '@components/IotHub/iot-hub-grouping';
 import CreatorHero from '@components/IotHub/CreatorHero.astro';
 import IotHubRuntimeConfig from '@components/IotHub/IotHubRuntimeConfig.astro';
 import SearchFilterBar from '@components/IotHub/SearchFilterBar.astro';
@@ -41,32 +44,28 @@ export const getStaticPaths = (async () => {
 	const categories = await getCollection('iotHubCategories');
 	const byId = new Map(categories.map((c) => [c.id, c.data]));
 
-	// Re-shape the per-category collection into a flat per-creator stream —
+	// Re-shape the per-category collection into a per-creator, per-type stream —
 	// the loader already fetches the full catalog (loops until hasNext is
-	// false), so no additional API call is needed. Each entry carries the
-	// item plus the category slug it belongs to, which the card links into.
+	// false), so no additional API call is needed. Grouping by item type is what
+	// the profile renders; the category slug a card links into is derived from
+	// that type by GroupedSection, so it is not carried here.
 	// Pure-numeric slugs excluded to mirror [slug].astro.
-	const byCreator = new Map<string, GridEntry[]>();
+	const byCreator = new Map<string, Map<IotHubItemType, ListingView[]>>();
 	for (const cat of IOT_HUB_CATEGORIES) {
 		const items = byId.get(cat.slug)?.items ?? [];
 		for (const item of items) {
 			if (isNumericSlug(item.slug)) continue;
 			if (!item.creatorId) continue;
-			const arr = byCreator.get(item.creatorId) ?? [];
-			arr.push({ item, categorySlug: cat.slug });
-			byCreator.set(item.creatorId, arr);
+			const byType = byCreator.get(item.creatorId) ?? new Map<IotHubItemType, ListingView[]>();
+			const arr = byType.get(cat.itemType) ?? [];
+			arr.push(item);
+			byType.set(cat.itemType, arr);
+			byCreator.set(item.creatorId, byType);
 		}
-	}
-	// Sort each creator's flat list by installCount DESC. Items inside each
-	// category arrived already sorted by the loader; re-sorting once we've
-	// merged across categories gives a single global ranking that
-	// pagination can slice.
-	for (const arr of byCreator.values()) {
-		arr.sort((a, b) => (b.item.installCount ?? 0) - (a.item.installCount ?? 0));
 	}
 
 	const ids = [...byCreator.keys()];
-	// One profile fetch per creator, reused across that creator's pages.
+	// One profile fetch per creator.
 	const profiles = new Map<string, CreatorView | null>();
 	await Promise.all(
 		ids.map(async (id) => {
@@ -74,50 +73,63 @@ export const getStaticPaths = (async () => {
 		})
 	);
 
-	// Pagination is over the creator's WHOLE catalogue: each page renders
-	// CREATOR_PAGE_SIZE items total, in one flat grid.
-	return ids.flatMap((id) => {
-		const allItems = byCreator.get(id)!;
-		const total = allItems.length;
-		const totalPages = Math.max(1, Math.ceil(total / CREATOR_PAGE_SIZE));
+	// One route per creator. The profile is a grouped answer — one screen, four
+	// of each type, the section header the way into the rest — so the old
+	// `/iot-hub/creator/<id>/2/`… pages are gone and redirected back here from
+	// src/data/redirects.ts.
+	return ids.map((id) => {
+		const byType = byCreator.get(id)!;
+		let total = 0;
+		for (const arr of byType.values()) total += arr.length;
 		const profile = profiles.get(id) ?? null;
-		const presentSlugs = new Set(allItems.map((s) => s.categorySlug));
-		const categoryLabels = IOT_HUB_CATEGORIES.filter((c) => presentSlugs.has(c.slug)).map(
+		const categoryLabels = IOT_HUB_CATEGORIES.filter((c) => byType.has(c.itemType)).map(
 			(c) => c.label
 		);
-		return Array.from({ length: totalPages }, (_, i) => {
-			const currentPage = i + 1;
-			// Each item keeps the slug of the collection it was loaded from, which
-			// is authoritative for the card's href.
-			const items = allItems.slice(i * CREATOR_PAGE_SIZE, currentPage * CREATOR_PAGE_SIZE);
-			return {
-				params: { id, page: currentPage === 1 ? undefined : String(currentPage) },
-				props: { profile, items, currentPage, totalPages, total, categoryLabels },
-			};
-		});
+		// installCount DESC, createdTime DESC tie-break, capped per type — the
+		// order the runtime's own grouped request comes back in. Items arrived
+		// sorted per category by the loader; this re-sorts inside each section
+		// so the static and the fetched view agree.
+		const sections = toSections(
+			[...byType].map(([itemType, items]) => {
+				const ranked = [...items].sort((a, b) => {
+					const ic = (b.installCount ?? 0) - (a.installCount ?? 0);
+					if (ic !== 0) return ic;
+					return (b.createdTime ?? 0) - (a.createdTime ?? 0);
+				});
+				return {
+					itemType,
+					items: ranked.slice(0, GROUPED_SECTION_SIZE),
+					total: ranked.length,
+				};
+			}),
+			// The profile's section headers must stay on the profile: "Widgets ›"
+			// here means this creator's widgets, not every widget in the Hub.
+			{ creatorId: id }
+		);
+		return {
+			params: { id, page: undefined },
+			props: { profile, sections, total, categoryLabels },
+		};
 	});
 }) satisfies GetStaticPaths;
 
 interface Props {
 	profile: CreatorView | null;
-	items: GridEntry[];
-	currentPage: number;
-	totalPages: number;
+	sections: GroupedSection[];
 	total: number;
 	categoryLabels: string[];
 }
 
-const { profile, items, currentPage, totalPages, total, categoryLabels } =
-	Astro.props as Props;
+const { profile, sections, total, categoryLabels } = Astro.props as Props;
 const { id } = Astro.params;
 
 // <lastmod> from the most recent API `updatedTime` among this page's listings.
 recordSitemapLastmod(
 	Astro.url.pathname,
-	items.map((entry) => entry.item.updatedTime)
+	sections.flatMap((section) => section.items.map((item) => item.updatedTime))
 );
 
-const first = items[0]?.item;
+const first = sections[0]?.items[0];
 const name = profile?.displayName ?? first?.creatorDisplayName ?? 'ThingsBoard';
 const avatarUrl = resolveAvatar(profile?.avatarUrl ?? first?.creatorAvatarUrl ?? null);
 const verified = profile?.verified ?? first?.creatorVerified ?? false;
@@ -142,6 +154,7 @@ const description = categoryList
 		data-creator-id={id}
 		data-base-path={basePath}
 		data-page-size={CREATOR_PAGE_SIZE}
+		data-grouped
 	>
 		<div class="iot-hub-creator__center">
 			<div class="iot-hub-creator__container">
@@ -166,15 +179,13 @@ const description = categoryList
 						heading={`${IOT_HUB_STRINGS.creatorPage.publishedItems} (${count})`}
 						searchPlaceholder={IOT_HUB_STRINGS.creatorPage.searchPlaceholder}
 						totalResults={total}
+						showRelevance
 					/>
-					<FlatResultsPanel
-						items={items}
-						currentPage={currentPage}
-						totalPages={totalPages}
-						basePath={basePath}
-						perPage={CREATOR_PAGE_SIZE}
+					<GroupedResultsPanel
+						sections={sections}
 						showCreator={false}
 						clearHref={basePath}
+						paginate={{ perPage: CREATOR_PAGE_SIZE, idBase: basePath }}
 					/>
 				</div>
 			</div>

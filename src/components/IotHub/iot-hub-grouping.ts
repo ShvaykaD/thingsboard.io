@@ -55,18 +55,52 @@ export function toGroupedSections(
 		// with no "+N more".
 		totals.set(type, item.typeTotal ?? list.length);
 	}
-	return IOT_HUB_TYPE_ORDER.filter((type) => (byType.get(type)?.length ?? 0) > 0).map((type) => {
-		const sectionItems = byType.get(type) ?? [];
-		const total = totals.get(type) ?? sectionItems.length;
-		return {
-			itemType: type,
-			label: getCategoryForItemType(type)?.label ?? type,
+	return toSections(
+		[...byType].map(([itemType, sectionItems]) => ({
+			itemType,
 			items: sectionItems,
-			total,
-			remaining: Math.max(0, total - sectionItems.length),
-			href: sectionHref(type, opts),
-		};
-	});
+			total: totals.get(itemType) ?? sectionItems.length,
+		})),
+		opts
+	);
+}
+
+/** One type's rows plus how many of that type exist behind them. */
+export interface SectionGroup {
+	itemType: IotHubItemType;
+	items: ListingView[];
+	/** Rows of this type in the whole answer, before the four-row cap. */
+	total: number;
+}
+
+/**
+ * Section order, labels, "+N more" arithmetic and header hrefs — the half of
+ * grouping that does not care where the rows came from.
+ *
+ * `toGroupedSections` feeds it a runtime `grouped=true` response; the statically
+ * built search page and creator profile feed it the content collections, where
+ * each type's real total is known outright and no `typeTotal` exists to read.
+ * Both paths must lay out identically, so neither gets to own this arithmetic.
+ */
+export function toSections(
+	groups: ReadonlyArray<SectionGroup>,
+	opts: GroupedSectionOptions = {}
+): GroupedSection[] {
+	const byType = new Map(groups.map((g) => [g.itemType, g]));
+	return IOT_HUB_TYPE_ORDER.filter((type) => (byType.get(type)?.items.length ?? 0) > 0).map(
+		(type) => {
+			const group = byType.get(type)!;
+			const total = Math.max(group.total, group.items.length);
+			return {
+				itemType: type,
+				label: getCategoryForItemType(type)?.label ?? type,
+				items: group.items,
+				total,
+				remaining: Math.max(0, total - group.items.length),
+				href: sectionHref(type, opts),
+			};
+		}
+	);
 }
 
 function sectionHref(type: IotHubItemType, opts: GroupedSectionOptions): string {

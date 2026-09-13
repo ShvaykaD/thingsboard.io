@@ -17,6 +17,8 @@ interface Props {
 	searchText?: string;
 	searchPlaceholder?: string;
 	totalResults: number;
+	/** Forwarded to IotHubSort — see its `showRelevance` prop. */
+	showRelevance?: boolean;
 }
 
 const {
@@ -26,6 +28,7 @@ const {
 	searchText = '',
 	searchPlaceholder = T.searchPlaceholder,
 	totalResults,
+	showRelevance = false,
 } = Astro.props;
 const resultsWord = totalResults === 1 ? T.resultSingular : T.resultPlural;
 const dynamicHeading = !!headingPrefix && searchText.length > 0;
@@ -76,7 +79,7 @@ const Heading = headingAs;
 					</svg>
 				</button>
 			</div>
-			<IotHubSort />
+			<IotHubSort showRelevance={showRelevance} />
 		</div>
 		<p class="search-bar__count" data-search-count>{totalResults} {resultsWord}</p>
 	</div>

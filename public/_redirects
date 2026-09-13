@@ -1197,6 +1197,8 @@
 /docs/mqtt-broker/* https://tbmq.io/docs/:splat 301
 /docs/user-guide/releases-table/* /docs/releases/releases-table/:splat 301
 /docs/pe/user-guide/releases-table/* /docs/pe/releases/releases-table/:splat 301
+/iot-hub/search/:page/ /iot-hub/search/ 301
+/iot-hub/creator/:id/:page/ /iot-hub/creator/:id/ 301
 /device-library/ce/* /iot-hub/devices/:splat 301
 /device-library/pe/* /iot-hub/devices/:splat 301
 /device-library/paas/* /iot-hub/devices/:splat 301

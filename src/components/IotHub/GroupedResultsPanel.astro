@@ -5,10 +5,12 @@ import IotHubFetchError from './IotHubFetchError.astro';
 import IotHubNoResults from './IotHubNoResults.astro';
 import IotHubSearchLoading from './IotHubSearchLoading.astro';
 import ListingCardTemplate from './ListingCardTemplate.astro';
+import PaginationBar from '@components/Pagination/PaginationBar.astro';
 
 // The sectioned twin of FlatResultsPanel: same state panels, same clone
-// templates, no pagination. A grouped answer is one screen by decision — the
-// way to more of one type is the section header, not a second page.
+// templates, no pagination of its own. A grouped answer is one screen by
+// decision — the way to more of one type is the section header, not a second
+// page.
 //
 // Both `preview` and `tile` templates are emitted here (not by the page) for
 // the same reason FlatResultsPanel carries them: lint:dualrender checks that
@@ -20,9 +22,38 @@ interface Props {
 	titleAs?: 'h2' | 'h3';
 	showCreator?: boolean;
 	clearHref?: string;
+	/**
+	 * Only for a grouped surface that can narrow to ONE type at runtime (the
+	 * creator profile's `?type=`): one type is not a grouped answer, so that
+	 * state renders a flat page and needs a paginator. It is emitted hidden and
+	 * in interactive mode — iot-hub-dynamic-search.ts unhides and fills it when
+	 * the surface leaves the grouped state, and hides it again on the way back.
+	 * Omit on a surface that is always grouped (`/iot-hub/search/`).
+	 */
+	paginate?: { perPage: number; idBase: string };
 }
 
-const { sections, titleAs = 'h3', showCreator = true, clearHref } = Astro.props;
+const {
+	sections,
+	titleAs = 'h3',
+	showCreator = true,
+	clearHref,
+	paginate,
+} = Astro.props;
+
+// Clone source for a runtime-rendered section. Same Pattern C as
+// ListingCardTemplate: the shell is authored once in GroupedSection.astro so
+// the clone carries Astro's scoped-style hash, and bindGroupedSection fills the
+// label, href and "+N more" chip. `items: []` on purpose — the grid inside is
+// built by the renderer from the card templates below.
+const placeholderSection: Section = {
+	itemType: 'WIDGET',
+	label: '',
+	items: [],
+	total: 0,
+	remaining: 0,
+	href: '#',
+};
 ---
 
 <div class="iot-hub-results">
@@ -37,6 +68,19 @@ const { sections, titleAs = 'h3', showCreator = true, clearHref } = Astro.props;
 	<IotHubFetchError />
 	<IotHubSearchLoading />
 </div>
+{
+	paginate && (
+		<PaginationBar
+			interactive
+			perPage={paginate.perPage}
+			idBase={paginate.idBase}
+			class="iot-hub-results__pagination"
+		/>
+	)
+}
+<template data-grouped-section-tmpl>
+	<GroupedSection section={placeholderSection} titleAs={titleAs} showCreator={showCreator} />
+</template>
 <ListingCardTemplate variant="preview" titleAs={titleAs} />
 <ListingCardTemplate variant="tile" titleAs={titleAs} />
 

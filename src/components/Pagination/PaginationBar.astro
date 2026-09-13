@@ -10,31 +10,59 @@
 import Pagination from './Pagination.astro';
 import PerPageSelector from './PerPageSelector.astro';
 
-interface Props {
-	currentPage: number;
-	totalPages: number;
-	basePath: string;
+//
+// Two modes, mirroring Pagination.astro's own:
+//   * default (link)  — crawlable page anchors built from `basePath`; the page
+//     knows its page count at build time.
+//   * `interactive`   — event-emitting buttons, and the whole bar starts
+//     hidden. For a surface whose page count only exists once the client has
+//     asked the API (the IoT Hub creator profile narrowed to one `?type=`):
+//     the build has no honest number to render, and a bar showing "1" before
+//     the first fetch would be a claim rather than a state. The client unhides
+//     it and calls updatePagination().
+type Props = {
 	perPage: number;
 	/** Stable per-instance string (e.g. basePath) for unique selector ids. */
 	idBase: string;
 	class?: string;
-}
+} & (
+	| {
+			interactive?: false;
+			currentPage: number;
+			totalPages: number;
+			basePath: string;
+	  }
+	| {
+			interactive: true;
+			currentPage?: never;
+			totalPages?: never;
+			basePath?: never;
+	  }
+);
 
-const {
-	currentPage,
-	totalPages,
-	basePath,
-	perPage,
-	idBase,
-	class: className = '',
-} = Astro.props;
+// Narrow on Astro.props directly — TS can't narrow a union through destructuring.
+const props = Astro.props;
+const { perPage, idBase, class: className = '' } = props;
+const interactive = props.interactive === true;
 ---
 
 <div
 	class:list={['tb-pagination-bar', className]}
 	data-tb-pagination-bar
+	hidden={interactive}
 >
-	<Pagination mode="link" currentPage={currentPage} totalPages={totalPages} basePath={basePath} />
+	{
+		interactive ? (
+			<Pagination mode="interactive" hidden />
+		) : (
+			<Pagination
+				mode="link"
+				currentPage={props.currentPage}
+				totalPages={props.totalPages}
+				basePath={props.basePath}
+			/>
+		)
+	}
 	<PerPageSelector perPage={perPage} idBase={idBase} />
 </div>
 

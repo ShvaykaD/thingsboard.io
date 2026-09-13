@@ -22,14 +22,16 @@ const gridItems = section.items.map((item) => ({ item, categorySlug }));
 
 <section class="iot-hub-group" data-grouped-section data-item-type={section.itemType}>
 	<a class="iot-hub-group__header" href={section.href} data-grouped-section-header>
-		<span class="iot-hub-group__label">{section.label}</span>
-		{
-			section.remaining > 0 && (
-				<span class="iot-hub-group__more" data-grouped-section-more>
-					+{section.remaining} more
-				</span>
-			)
-		}
+		<span class="iot-hub-group__label" data-grouped-section-label>{section.label}</span>
+		{/* Always emitted, hidden when there is nothing more behind the section.
+		    The runtime renderer clones a whole section from a <template> of this
+		    component (GroupedResultsPanel), and a node that exists only when
+		    remaining > 0 cannot be cloned into being — the script would have to
+		    build it, losing the scoped-style hash Astro stamps on markup written
+		    here, and the chip would render unstyled. */}
+		<span class="iot-hub-group__more" data-grouped-section-more hidden={section.remaining === 0}>
+			+{section.remaining} more
+		</span>
 	</a>
 	<FlatListingGrid items={gridItems} titleAs={titleAs} showCreator={showCreator} />
 </section>

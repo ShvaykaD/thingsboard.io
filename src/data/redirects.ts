@@ -1608,6 +1608,20 @@ export const DYNAMIC_REDIRECTS: DynamicRedirectGroup[] = [
 	},
 	{
 		comment:
+			'IoT Hub — search & creator-profile pagination. Both surfaces now answer ' +
+			'with one grouped screen (four of each item type, the section header the ' +
+			'way into the rest), so their /2/, /3/… pages are no longer built. They ' +
+			'were indexed, so each numbered page folds back into the surface it came ' +
+			'from. Each placeholder matches exactly one segment, and nothing else ' +
+			'lives at that depth under either prefix — a creator id is its own ' +
+			'segment, and the profile itself is one segment shorter.',
+		entries: [
+			{ source: '/iot-hub/search/:page/', target: '/iot-hub/search/' },
+			{ source: '/iot-hub/creator/:id/:page/', target: '/iot-hub/creator/:id/' },
+		],
+	},
+	{
+		comment:
 			'Device Library → IoT Hub. Per-platform rules first; bare /device-library/* ' +
 			'last so it only catches flat slugs. Slug-rename/case aliases are static above.',
 		entries: [
