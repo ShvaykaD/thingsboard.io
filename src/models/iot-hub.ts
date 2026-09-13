@@ -363,8 +363,8 @@ export const ITEM_SUBTYPE_LABELS: Partial<Record<IotHubItemType, Record<string, 
 // params it maps to (`sortProperty` + `sortOrder`), so consumers can spread
 // them straight into the listings request without a second lookup.
 
-export type IotHubSortId = 'most-installed' | 'newest' | 'name-asc';
-export type IotHubSortProperty = 'installCount' | 'publishedTime' | 'name';
+export type IotHubSortId = 'most-relevant' | 'most-installed' | 'newest' | 'name-asc';
+export type IotHubSortProperty = 'relevance' | 'installCount' | 'publishedTime' | 'name';
 export type IotHubSortDirection = 'ASC' | 'DESC';
 
 export interface IotHubSortOption {
@@ -375,16 +375,46 @@ export interface IotHubSortOption {
 }
 
 export const IOT_HUB_SORT_OPTIONS: ReadonlyArray<IotHubSortOption> = [
+	{ id: 'most-relevant',  label: 'Most Relevant',  sortProperty: 'relevance',     sortOrder: 'DESC' },
 	{ id: 'most-installed', label: 'Most Installed', sortProperty: 'installCount',  sortOrder: 'DESC' },
 	{ id: 'newest',         label: 'Newest',         sortProperty: 'publishedTime', sortOrder: 'DESC' },
 	{ id: 'name-asc',       label: 'Name (A-Z)',     sortProperty: 'name',          sortOrder: 'ASC'  },
 ];
 
+// Unchanged by grouped search: an empty field has nothing to be relevant to, and
+// the backend substitutes relevance with installCount in that case anyway. A
+// visitor landing on /iot-hub/search/ with no query sees the order they did before.
 export const DEFAULT_IOT_HUB_SORT_ID: IotHubSortId = 'most-installed';
 
+// Resolved by id, not by position: 'most-relevant' now sits at index 0, so a
+// positional fallback would quietly make relevance the answer for every unknown
+// or absent sort id.
+const DEFAULT_IOT_HUB_SORT_OPTION: IotHubSortOption =
+	IOT_HUB_SORT_OPTIONS.find((o) => o.id === DEFAULT_IOT_HUB_SORT_ID) ?? IOT_HUB_SORT_OPTIONS[0];
+
 export function getIotHubSortOption(id: string | null | undefined): IotHubSortOption {
-	return IOT_HUB_SORT_OPTIONS.find((o) => o.id === id) ?? IOT_HUB_SORT_OPTIONS[0];
+	return IOT_HUB_SORT_OPTIONS.find((o) => o.id === id) ?? DEFAULT_IOT_HUB_SORT_OPTION;
 }
+
+// --- Grouped search ----------------------------------------------------------
+
+// Section order on every grouped surface. Must equal the platform's TYPE_ORDER in
+// iot-hub-search.component.ts — the same query answered by the two clients must lay
+// out the same way. IOT_HUB_CATEGORIES happens to agree today; this constant is what
+// keeps it true when someone reorders that registry for a navigation reason.
+export const IOT_HUB_TYPE_ORDER: ReadonlyArray<IotHubItemType> = [
+	'DEVICE',
+	'SOLUTION_TEMPLATE',
+	'WIDGET',
+	'CALCULATED_FIELD',
+	'ALARM_RULE',
+	'RULE_CHAIN',
+];
+
+// Rows per section. The backend caps at this too; the client never slices, it only
+// renders what it was given — but the number is here so the "+N more" copy and the
+// grid's row reservation agree with the request.
+export const GROUPED_SECTION_SIZE = 4;
 
 export const getSubtypeLabel = (itemType: IotHubItemType, key: string): string =>
 	ITEM_SUBTYPE_LABELS[itemType]?.[key] ?? key;
@@ -510,6 +540,10 @@ export const listingViewSchema = z.object({
 	creatorVerified: z.boolean().default(false),
 	creatorAffiliateId: z.string().nullable().default(null),
 	screenshots: z.array(screenshotResourceSchema).default([]),
+	// Total rows of this item's type behind a grouped response — the section's
+	// "+N more" is derived from it. Present only on a `grouped=true` response, so
+	// optional: the static content collections and every flat fetch omit it.
+	typeTotal: z.number().optional(),
 });
 
 export const listingDetailSchema = listingViewSchema.extend({

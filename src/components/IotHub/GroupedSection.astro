@@ -1,0 +1,68 @@
+---
+import { getCategoryForItemType } from '@models/iot-hub';
+import type { GroupedSection } from './iot-hub-grouping';
+import FlatListingGrid from './FlatListingGrid.astro';
+
+interface Props {
+	section: GroupedSection;
+	titleAs?: 'h2' | 'h3';
+	showCreator?: boolean;
+}
+
+const { section, titleAs = 'h3', showCreator = true } = Astro.props;
+
+// FlatListingGrid → ListingCard treats `categorySlug` as authoritative for the
+// card's href (`getCategoryForItemType` is the single source of truth the
+// grouping helper itself already uses for the section's own `href`) — an
+// empty slug bakes every card's href to '#' (ListingCard's placeholder-template
+// guard), so it has to come from the registry, not from this component.
+const categorySlug = getCategoryForItemType(section.itemType)?.slug ?? '';
+const gridItems = section.items.map((item) => ({ item, categorySlug }));
+---
+
+<section class="iot-hub-group" data-grouped-section data-item-type={section.itemType}>
+	<a class="iot-hub-group__header" href={section.href} data-grouped-section-header>
+		<span class="iot-hub-group__label">{section.label}</span>
+		{
+			section.remaining > 0 && (
+				<span class="iot-hub-group__more" data-grouped-section-more>
+					+{section.remaining} more
+				</span>
+			)
+		}
+	</a>
+	<FlatListingGrid items={gridItems} titleAs={titleAs} showCreator={showCreator} />
+</section>
+
+<style lang="scss">
+	@use '../../styles/_variables.scss' as *;
+
+	.iot-hub-group {
+		display: flex;
+		flex-direction: column;
+		gap: 1rem;
+	}
+
+	.iot-hub-group__header {
+		display: flex;
+		align-items: baseline;
+		gap: 0.5rem;
+		text-decoration: none;
+		color: inherit;
+
+		&:hover .iot-hub-group__label {
+			text-decoration: underline;
+		}
+	}
+
+	.iot-hub-group__label {
+		font-size: 1.25rem;
+		font-weight: $font-weight-semibold;
+		color: var(--color-text);
+	}
+
+	.iot-hub-group__more {
+		font-size: 0.875rem;
+		color: var(--color-primary);
+	}
+</style>

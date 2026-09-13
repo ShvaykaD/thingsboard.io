@@ -1,0 +1,54 @@
+---
+import type { GroupedSection as Section } from './iot-hub-grouping';
+import GroupedSection from './GroupedSection.astro';
+import IotHubFetchError from './IotHubFetchError.astro';
+import IotHubNoResults from './IotHubNoResults.astro';
+import IotHubSearchLoading from './IotHubSearchLoading.astro';
+import ListingCardTemplate from './ListingCardTemplate.astro';
+
+// The sectioned twin of FlatResultsPanel: same state panels, same clone
+// templates, no pagination. A grouped answer is one screen by decision — the
+// way to more of one type is the section header, not a second page.
+//
+// Both `preview` and `tile` templates are emitted here (not by the page) for
+// the same reason FlatResultsPanel carries them: lint:dualrender checks that
+// a page cloning those shapes has both present, and a mixed-itemType grid
+// (this one, across up to six sections) always needs both.
+
+interface Props {
+	sections: Section[];
+	titleAs?: 'h2' | 'h3';
+	showCreator?: boolean;
+	clearHref?: string;
+}
+
+const { sections, titleAs = 'h3', showCreator = true, clearHref } = Astro.props;
+---
+
+<div class="iot-hub-results">
+	<div data-search-results>
+		{
+			sections.map((section) => (
+				<GroupedSection section={section} titleAs={titleAs} showCreator={showCreator} />
+			))
+		}
+	</div>
+	<IotHubNoResults clearHref={clearHref} />
+	<IotHubFetchError />
+	<IotHubSearchLoading />
+</div>
+<ListingCardTemplate variant="preview" titleAs={titleAs} />
+<ListingCardTemplate variant="tile" titleAs={titleAs} />
+
+<style>
+	/* Positioned ancestor for the absolute loading overlay. */
+	.iot-hub-results {
+		position: relative;
+	}
+
+	[data-search-results] {
+		display: flex;
+		flex-direction: column;
+		gap: 2.5rem;
+	}
+</style>

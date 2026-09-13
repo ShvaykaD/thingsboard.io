@@ -823,7 +823,7 @@ const highlights = [
 		// fetch resolves. The flag also lets fast typing skip a redundant
 		// re-render while loading is already visible.
 		let isLoading = false;
-		let lastQuery = ' '; // sentinel: never matches a real first value
+		let lastQuery = '\0'; // sentinel: never matches a real first value
 
 		function updateFooter(q: string): void {
 			footer!.href = buildSearchUrl(q);
