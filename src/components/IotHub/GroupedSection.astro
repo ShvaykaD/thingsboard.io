@@ -30,7 +30,26 @@ const gridItems = section.items.map((item) => ({ item, categorySlug }));
 		    build it, losing the scoped-style hash Astro stamps on markup written
 		    here, and the chip would render unstyled. */}
 		<span class="iot-hub-group__more" data-grouped-section-more hidden={section.remaining === 0}>
-			+{section.remaining} more
+			<span data-grouped-section-more-count>+{section.remaining} more</span>
+			{/* The chevron is what says the header is a link — nothing else here is
+			    underlined or coloured until hover. It lives INSIDE the chip rather than
+			    beside it so it disappears with the count: a lone chevron on a section
+			    that is already showing everything points at nothing. */}
+			<svg
+				class="iot-hub-group__chevron"
+				width="16"
+				height="16"
+				viewBox="0 0 24 24"
+				fill="none"
+				aria-hidden="true"
+			>
+				<path
+					d="m9 6 6 6-6 6"
+					stroke="currentColor"
+					stroke-width="2"
+					stroke-linecap="round"
+					stroke-linejoin="round"></path>
+			</svg>
 		</span>
 	</a>
 	<FlatListingGrid items={gridItems} titleAs={titleAs} showCreator={showCreator} />
@@ -64,7 +83,14 @@ const gridItems = section.items.map((item) => ({ item, categorySlug }));
 	}
 
 	.iot-hub-group__more {
+		display: inline-flex;
+		align-items: center;
+		gap: 0.125rem;
 		font-size: 0.875rem;
 		color: var(--color-primary);
+	}
+
+	.iot-hub-group__more[hidden] {
+		display: none;
 	}
 </style>

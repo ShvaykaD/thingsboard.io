@@ -105,7 +105,7 @@ const highlights = [
 					data-popup-footer
 				>
 					{/* Reworded per state by updateFooter() below; the field starts empty. */}
-					Go to search page
+					See most installed
 				</a>
 			</div>
 		</form>
@@ -512,9 +512,14 @@ const highlights = [
 		}
 	}
 
-	// "+N more": how many rows of this type the answer holds beyond the ones
-	// shown. Absent when there are none — the header still links.
+	// "+N more ›": how many rows of this type the answer holds beyond the ones
+	// shown, plus the chevron that says the header is a link. The whole chip is
+	// absent when there are none — the header still links, but a chevron on a
+	// section that already shows everything would point at nothing.
 	:global(.iot-hub-hero__search-popup-group-more) {
+		display: inline-flex;
+		align-items: center;
+		gap: 0.125rem;
 		flex-shrink: 0;
 		font-weight: $font-weight-semibold;
 		color: var(--color-primary);
@@ -822,7 +827,15 @@ const highlights = [
 			if (section.remaining > 0) {
 				const more = document.createElement('span');
 				more.className = 'iot-hub-hero__search-popup-group-more';
-				more.textContent = `+${section.remaining} more`;
+				// The chevron is what says the header is a link, and it lives inside the
+				// chip so it goes away with it: a lone chevron on a section that already
+				// shows everything points at nothing. `remaining` is a number, so the
+				// only interpolated value here cannot carry markup.
+				more.innerHTML =
+					`+${section.remaining} more` +
+					'<svg width="14" height="14" viewBox="0 0 24 24" fill="none" aria-hidden="true">' +
+					'<path d="m9 6 6 6-6 6" stroke="currentColor" stroke-width="2" ' +
+					'stroke-linecap="round" stroke-linejoin="round"></path></svg>';
 				header.appendChild(more);
 			}
 			group.appendChild(header);
@@ -859,7 +872,7 @@ const highlights = [
 			// Empty field: the popup is showing the catalogue, so the footer offers
 			// the catalogue. With text: it offers the same query on a surface that
 			// can show more of it.
-			footer!.textContent = trimmed ? `See all results for "${trimmed}"` : 'Go to search page';
+			footer!.textContent = trimmed ? `See results for "${trimmed}"` : 'See most installed';
 			footer!.href = buildSearchUrl(q);
 		}
 

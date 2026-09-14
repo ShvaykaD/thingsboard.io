@@ -24,6 +24,10 @@ export function bindGroupedSection(root: HTMLElement, section: GroupedSection): 
 		// Hidden rather than removed, so a re-render of the same clone source can
 		// bring it back — and so the cloned shape stays identical to the built one.
 		more.hidden = section.remaining === 0;
-		more.textContent = `+${section.remaining} more`;
 	}
+
+	// The count, not the chip: the chip also holds the chevron, and writing
+	// textContent on the chip would delete it on the first re-render.
+	const moreCount = root.querySelector<HTMLElement>('[data-grouped-section-more-count]');
+	if (moreCount) moreCount.textContent = `+${section.remaining} more`;
 }
