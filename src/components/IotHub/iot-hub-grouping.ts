@@ -51,8 +51,9 @@ export function toGroupedSections(
 		list.push(item);
 		byType.set(type, list);
 		// Every row of a type carries the same typeTotal; the fallback keeps a
-		// non-grouped response (typeTotal undefined) rendering as plain sections
-		// with no "+N more".
+		// non-grouped response rendering as plain sections with no "+N more".
+		// `??` rather than `||` because a flat read sends the field as null, not
+		// absent, and 0 is a value this must not swallow.
 		totals.set(type, item.typeTotal ?? list.length);
 	}
 	return toSections(
