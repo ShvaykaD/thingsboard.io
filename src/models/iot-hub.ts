@@ -405,14 +405,22 @@ export const IOT_HUB_SORT_OPTIONS: ReadonlyArray<IotHubSortOption> = [
 	{ id: 'name-asc',       label: 'Name (A-Z)',     sortProperty: 'name',          sortOrder: 'ASC'  },
 ];
 
-// Unchanged by grouped search: an empty field has nothing to be relevant to, and
-// the backend substitutes relevance with installCount in that case anyway. A
-// visitor landing on /iot-hub/search/ with no query sees the order they did before.
-export const DEFAULT_IOT_HUB_SORT_ID: IotHubSortId = 'most-installed';
+// Relevance is the default in BOTH states, which is why nothing here switches on
+// whether the search field has text. With text it ranks the answer; without it the
+// backend substitutes the install count — measured identical, row for row, across
+// all 665 listings — so a visitor who never touches the control sees the order they
+// always saw while browsing, and the best matches once they type.
+//
+// The alternative was to default to 'most-installed' and have the control flip to
+// 'most-relevant' by itself while the field had text. Rejected: the flip happens
+// without anyone asking for it. The cost accepted instead is that on a query-less
+// page the label says "Most Relevant" over an install-ordered list, and switching
+// to "Most Installed" there changes nothing visible.
+export const DEFAULT_IOT_HUB_SORT_ID: IotHubSortId = 'most-relevant';
 
-// Resolved by id, not by position: 'most-relevant' now sits at index 0, so a
-// positional fallback would quietly make relevance the answer for every unknown
-// or absent sort id.
+// Resolved by id, not by position, so the default survives a reordering of the
+// options array — the list is written best-first for the menu, which is a
+// presentation decision and not one this fallback should depend on.
 const DEFAULT_IOT_HUB_SORT_OPTION: IotHubSortOption =
 	IOT_HUB_SORT_OPTIONS.find((o) => o.id === DEFAULT_IOT_HUB_SORT_ID) ?? IOT_HUB_SORT_OPTIONS[0];
 

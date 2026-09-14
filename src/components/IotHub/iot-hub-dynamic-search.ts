@@ -225,9 +225,6 @@ export function setupDynamicSearch(): void {
 
 	let searchText = '';
 	let sortId: string = DEFAULT_IOT_HUB_SORT_ID;
-	// Set once the visitor picks a sort themselves (or arrives with `?sort=`).
-	// From then on the field stops implying one — see effectiveSortId.
-	let sortChosenByUser = false;
 	let pageSize = initialPageSize;
 	let currentPage = 1;
 	let abort: AbortController | null = null;
@@ -374,19 +371,6 @@ export function setupDynamicSearch(): void {
 		sortRoot.dataset.sortId = id;
 	}
 
-	/**
-	 * The sort the request and the sort control must both use. Text in the field
-	 * implies relevance — that is the only thing there is to rank an answer by —
-	 * while an empty field has nothing to be relevant to, and the backend would
-	 * substitute the install count anyway. Derived rather than stored, so clearing
-	 * the field gives the visitor their own choice back instead of stranding them
-	 * on a relevance sort with nothing to rank.
-	 */
-	function effectiveSortId(): string {
-		if (sortChosenByUser || !searchText.trim()) return sortId;
-		return 'most-relevant';
-	}
-
 	function applyPageSizeToUi(size: number): void {
 		const perPageRoot = root!.querySelector<HTMLElement>('[data-per-page-root]');
 		if (perPageRoot) setPerPageValue(perPageRoot, size);
@@ -457,7 +441,7 @@ export function setupDynamicSearch(): void {
 		// loading overlay still runs on top so the user sees that the
 		// request is in flight.
 		setLoading(true);
-		const sort = getIotHubSortOption(effectiveSortId());
+		const sort = getIotHubSortOption(sortId);
 		const params = new URLSearchParams({
 			pageSize: String(pageSize),
 			page: String(currentPage - 1), // backend is 0-based
@@ -535,15 +519,9 @@ export function setupDynamicSearch(): void {
 	const urlSort = urlParams.get('sort') ?? '';
 	if (urlSort && getIotHubSortOption(urlSort).id === urlSort) {
 		sortId = urlSort;
-		// An explicit `?sort=` in the URL is the visitor's own choice, shared or
-		// bookmarked. The field must not override it.
-		sortChosenByUser = true;
+		applySortToUi(sortId);
 		if (urlSort !== DEFAULT_IOT_HUB_SORT_ID) hasUrlState = true;
 	}
-	// After both `q` and `sort` are read, so landing on `?q=temperature` opens on
-	// "Most Relevant" and `?q=temperature&sort=most-installed` opens on the sort
-	// that was shared.
-	applySortToUi(effectiveSortId());
 
 	const urlPageSize = Number.parseInt(urlParams.get('pageSize') ?? '', 10);
 	if (Number.isFinite(urlPageSize) && urlPageSize > 0) {
@@ -604,9 +582,6 @@ export function setupDynamicSearch(): void {
 
 	root.addEventListener('iot-hub-search-text:change', ((e: CustomEvent) => {
 		searchText = e.detail?.searchText ?? '';
-		// The label has to follow the field: typing implies relevance, emptying
-		// hands the visitor's own choice back.
-		applySortToUi(effectiveSortId());
 		if (debounceTimer !== undefined) clearTimeout(debounceTimer);
 		// setLoading kept inside refetch so the spinner only flashes once
 		// the fetch is actually in flight, not on every keystroke.
@@ -617,7 +592,6 @@ export function setupDynamicSearch(): void {
 
 	root.addEventListener('iot-hub-sort:change', ((e: CustomEvent) => {
 		sortId = e.detail?.id ?? DEFAULT_IOT_HUB_SORT_ID;
-		sortChosenByUser = true;
 		void refetch({ resetPage: true });
 	}) as EventListener);
 
