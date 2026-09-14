@@ -422,7 +422,8 @@ export function getIotHubSortOption(id: string | null | undefined): IotHubSortOp
 
 // --- Grouped search ----------------------------------------------------------
 
-// Section order on every grouped surface. Must equal the platform's TYPE_ORDER in
+// Section order in the hero popup — the only surface here that groups. Must equal
+// the platform's TYPE_ORDER in
 // iot-hub-search.component.ts — the same query answered by the two clients must lay
 // out the same way. IOT_HUB_CATEGORIES happens to agree today; this constant is what
 // keeps it true when someone reorders that registry for a navigation reason.
@@ -434,11 +435,6 @@ export const IOT_HUB_TYPE_ORDER: ReadonlyArray<IotHubItemType> = [
 	'ALARM_RULE',
 	'RULE_CHAIN',
 ];
-
-// Rows per section. The backend caps at this too; the client never slices, it only
-// renders what it was given — but the number is here so the "+N more" copy and the
-// grid's row reservation agree with the request.
-export const GROUPED_SECTION_SIZE = 4;
 
 export const getSubtypeLabel = (itemType: IotHubItemType, key: string): string =>
 	ITEM_SUBTYPE_LABELS[itemType]?.[key] ?? key;
