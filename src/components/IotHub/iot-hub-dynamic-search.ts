@@ -6,15 +6,15 @@ import {
 	getCardVariant,
 	getCategoryForItemType,
 	getIotHubSortOption,
+	isNumericSlug,
 	resolvePreviewImage,
 	type ListingView,
 	type PageData,
 } from '@models/iot-hub';
 import { bindListingCard } from './iot-hub-listing-card-bind';
-import { bindGroupedSection } from './iot-hub-grouped-section-bind';
-import { toGroupedSections } from './iot-hub-grouping';
 import type { CardShape } from './listing-card-hooks';
 import { getKnownSlugs } from './iot-hub-known-slugs';
+import { recordListOrigin } from './iot-hub-list-origin';
 import { updatePagination } from '@components/Pagination/pagination-client';
 import { setPerPageValue } from '@components/Pagination/per-page-client';
 
@@ -36,28 +36,13 @@ function updateResultsCount(countEl: HTMLElement, totalResults: number): void {
 //                          cards render with the creator row hidden.
 //   * `data-item-type`   — when set (category pages), every fetch adds
 //                          &type=<itemType> so results stay scoped.
-//   * `data-grouped`     — when present (/iot-hub/search/, creator profile),
-//                          the surface asks for `grouped=true` and renders one
-//                          section per item type instead of a flat page. See
-//                          "Grouped surfaces" below.
 //   * `data-page-size`   — initial page size; falls back to SEARCH_PAGE_SIZE.
 //   * `data-base-path`   — root path used by `history.replaceState` when
 //                          syncing URL state; falls back to `location.pathname`.
-//
-// Grouped surfaces: the response comes back already grouped and already capped
-// per type, each row carrying `typeTotal`, so the client renders the sections it
-// was given rather than slicing a flat page. Consequences, all of them
-// deliberate:
-//   * no `pageSize` is sent — the server sizes a grouped answer itself, and a
-//     number here would be a second source of truth about its shape;
-//   * there is no pagination, and no `page`/`pageSize` in the URL: the way to
-//     more of one type is the section header;
-//   * `?type=` narrows the surface to ONE type, which is not a grouped answer —
-//     that state requests `grouped=false` and paginates like a category page.
-//     Only a grouped surface with no pinned `data-item-type` reads it.
-// Whether the page can render sections at all is a build-time fact (the section
-// template and the card templates it clones are emitted by GroupedResultsPanel),
-// which is why the switch is an attribute on the root rather than state.
+//   * `data-back-label`  — what this list calls itself. Recorded with the
+//                          list URL when a card is opened, so the detail
+//                          page's parent crumb can name and link back to it
+//                          (see iot-hub-list-origin.ts).
 //
 // FilterPanel integration: when the page renders a FilterPanel, this
 // pipeline listens for `iot-hub-filter:change` and adds the selected
@@ -68,6 +53,9 @@ function updateResultsCount(countEl: HTMLElement, totalResults: number): void {
 //   connectivity      → connectivity
 //   category          → categories
 //   useCase           → useCases
+//   itemType          → type  (catalogue only — the page is not pinned to
+//                       one type, so the visitor picks them; the API takes a
+//                       comma-separated list)
 //   type              → widgetTypes / cfTypes / ruleChainTypes
 //                       (resolved from `data-item-type`)
 //
@@ -84,6 +72,14 @@ function updateResultsCount(countEl: HTMLElement, totalResults: number): void {
 
 const DEBOUNCE_MS = 300;
 
+const NR = IOT_HUB_STRINGS.noResults;
+
+// Panel section key → the heading the visitor saw above those checkboxes, so
+// the empty state names the filter the same way the panel does. Indexed
+// straight off the panel's own strings, so a new facet is named here the
+// moment it has a heading there.
+const SECTION_LABELS = IOT_HUB_STRINGS.filterPanel.sections as Record<string, string>;
+
 // FilterPanel section keys are translated to API/URL params here.
 // `type` resolves to one of three names depending on the page's itemType
 // (widgets / calculated fields / rule chains each have their own param).
@@ -93,6 +89,9 @@ const FILTER_KEY_TO_PARAM: Record<string, string> = {
 	connectivity: 'connectivity',
 	category: 'categories',
 	useCase: 'useCases',
+	// Catalogue only. `type` is the same param a pinned page sets from
+	// `data-item-type`, which is why the two can never both be in play.
+	itemType: 'type',
 };
 
 function filterParamName(filterKey: string, itemType: string): string {
@@ -122,8 +121,21 @@ const PARAM_TO_FILTER_KEY: Record<string, string> = {
 	widgetTypes: 'type',
 	cfTypes: 'type',
 	ruleChainTypes: 'type',
+	type: 'itemType',
 };
 const FILTER_PARAM_NAMES = Object.keys(PARAM_TO_FILTER_KEY);
+
+// Every param `syncUrl` below can write, and so everything that counts as this
+// list's own state. Handed to recordListOrigin, which stores these and drops
+// the rest — anything else in the address belongs to how the visitor arrived,
+// not to the list. Keep in step with `syncUrl`.
+const STATE_PARAM_NAMES: readonly string[] = [
+	'q',
+	'sort',
+	'page',
+	'pageSize',
+	...FILTER_PARAM_NAMES,
+];
 
 function filtersEqual(
 	a: Record<string, string[]>,
@@ -148,13 +160,12 @@ export function setupDynamicSearch(): void {
 	if (root.dataset.dynamicSearchInited) return;
 	root.dataset.dynamicSearchInited = 'true';
 
+	// Ahead of every other guard below: a page whose templates are missing
+	// still renders its static first page of cards, and its URL may still
+	// carry sort + filters worth carrying over.
+	recordListOrigin(root, STATE_PARAM_NAMES);
+
 	const creatorId = root.dataset.creatorId ?? '';
-	// The type this page is pinned to at build time (category pages). It decides
-	// which card templates the page emits, so it must NOT be conflated with the
-	// `?type=` a grouped surface can pick up at runtime: adopting that into
-	// `itemType` would flip `mixedGrid` below and make the init guard demand a
-	// `compact` template the page never rendered — killing dynamic search
-	// outright. `typeFilter()` is the request-level union of the two.
 	const itemType = root.dataset.itemType ?? '';
 	const initialPageSize =
 		Number.parseInt(root.dataset.pageSize ?? '', 10) || SEARCH_PAGE_SIZE;
@@ -173,15 +184,24 @@ export function setupDynamicSearch(): void {
 	const paginationBar = root.querySelector<HTMLElement>('[data-tb-pagination-bar]');
 	const countEl = root.querySelector<HTMLElement>('[data-search-count]');
 	const noResults = root.querySelector<HTMLElement>('[data-iot-hub-no-results]');
+	const noResultsReason = root.querySelector<HTMLElement>(
+		'[data-iot-hub-no-results-reason]'
+	);
 	const fetchError = root.querySelector<HTMLElement>('[data-iot-hub-fetch-error]');
 	const retryBtn = root.querySelector<HTMLButtonElement>(
 		'[data-iot-hub-fetch-error-retry]'
 	);
 	if (!input || !resultsContainer || !itemsWrap || !countEl || !noResults) return;
 
-	const sectionTmpl = document.querySelector<HTMLTemplateElement>(
-		'[data-grouped-section-tmpl]'
+	// Whether this page lets the visitor choose item types. Only the catalogue
+	// panel renders that facet: a category page's type is fixed by its route,
+	// and the creator page has no panel at all. It gates `type` as a *filter*
+	// — without it a stray `?type=WIDGET` on one of those URLs would silently
+	// narrow the list with no chip or checkbox to undo it.
+	const hasItemTypeFacet = !!document.querySelector(
+		'[data-iot-hub-filter-panel] .iot-hub-filter-option__input[name="itemType"]'
 	);
+
 	const previewTmpl = document.querySelector<HTMLTemplateElement>(
 		'[data-listing-card-tmpl][data-variant="preview"]'
 	);
@@ -203,58 +223,29 @@ export function setupDynamicSearch(): void {
 	const previewTemplate = previewTmpl;
 	const altTemplate = alt;
 
-	// Can this page render sections at all? A build-time fact: the section
-	// template only exists where GroupedResultsPanel emitted it, and a pinned
-	// item type means the page is already one type. Without the template the
-	// surface degrades to the flat path rather than rendering nothing.
-	const sectionTemplate = root.hasAttribute('data-grouped') && !itemType ? sectionTmpl : null;
-
 	let searchText = '';
 	let sortId: string = DEFAULT_IOT_HUB_SORT_ID;
-	// Set the moment the visitor picks a sort themselves. Until then, typing in
-	// the field is allowed to choose "Most relevant" for them (see effectiveSortId).
+	// Set once the visitor picks a sort themselves (or arrives with `?sort=`).
+	// From then on the field stops implying one — see effectiveSortId.
 	let sortChosenByUser = false;
-	// `?type=` on a grouped surface. Narrows the answer to one type, which ends
-	// the grouped state — see the module header.
-	let urlItemType = '';
 	let pageSize = initialPageSize;
 	let currentPage = 1;
 	let abort: AbortController | null = null;
 	let debounceTimer: number | undefined;
 	let retryTimer: number | undefined;
 	// FilterPanel selections keyed by section key (vendor, useCase, …).
-	// Values are the raw checkbox values; labels live with the chips.
+	// Values are the raw checkbox values — what the API wants.
 	let filters: Record<string, string[]> = {};
+	// The same selection as the panel labelled it, used to name the active
+	// filters in the empty state. Best-effort: a selection restored from the
+	// URL has no labels until the panel echoes it back, so the reason falls
+	// back to the raw values.
+	let filterLabels: Record<string, string[]> = {};
 	// Last refetch options, replayed when the user clicks "Try again"
 	// after a fetch error. resetPage=false keeps the page index the user
 	// was on when the failure happened.
 	let lastRefetchOpts: { resetPage?: boolean } = { resetPage: false };
 	let lastTrackedQuery: string | null = null;
-
-	// --- Surface state -----------------------------------------------------
-
-	/** The item type every request is scoped to, pinned or picked from `?type=`. */
-	function typeFilter(): string {
-		return itemType || urlItemType;
-	}
-
-	/** Grouped exactly while the surface can render sections AND is not one type. */
-	function isGrouped(): boolean {
-		return sectionTemplate !== null && !urlItemType;
-	}
-
-	/**
-	 * The sort the request and the sort control must both use. "Most relevant" is
-	 * what a grouped surface shows while the field has text — an empty field has
-	 * nothing to be relevant to, and the backend substitutes installCount there
-	 * anyway. Derived rather than stored, so clearing the field restores the
-	 * visitor's own choice instead of stranding them on a relevance sort with
-	 * nothing to rank.
-	 */
-	function effectiveSortId(): string {
-		if (sortChosenByUser || !isGrouped() || !searchText.trim()) return sortId;
-		return 'most-relevant';
-	}
 
 	// Push an `iot_hub_query` event to dataLayer once per changed query state
 	// (search text + active filters). Pagination, sort and repeats don't
@@ -279,8 +270,8 @@ export function setupDynamicSearch(): void {
 			search_term: term,
 			search_filters: activeFilters,
 			search_results_count: resultsCount,
-			search_surface: typeFilter() || (creatorId ? 'creator' : 'all'),
-			search_sort: effectiveSortId(),
+			search_surface: itemType || (creatorId ? 'creator' : 'all'),
+			search_sort: sortId,
 		});
 	}
 
@@ -288,19 +279,36 @@ export function setupDynamicSearch(): void {
 		itemsWrap!.classList.toggle('is-loading', loading);
 	}
 
-	function showNoResults(show: boolean): void {
-		noResults!.hidden = !show;
-		if (show) resultsContainer!.replaceChildren();
+	// "Type: Devices and Category: Energy" — the clauses that narrowed the list,
+	// in the order the visitor meets them (search box first, then the panel's
+	// sections). Empty when nothing is narrowing it.
+	function activeNarrowingSummary(): string {
+		const clauses: string[] = [];
+		const trimmed = searchText.trim();
+		if (trimmed) clauses.push(`${NR.reasonSearch} \u201c${trimmed}\u201d`);
+		for (const [key, values] of Object.entries(filters)) {
+			if (values.length === 0) continue;
+			if (key === 'itemType' && !hasItemTypeFacet) continue;
+			const sectionLabel = SECTION_LABELS[key] ?? key;
+			const labels = filterLabels[key] ?? values;
+			clauses.push(`${sectionLabel}: ${labels.join(', ')}`);
+		}
+		if (clauses.length === 0) return '';
+		if (clauses.length === 1) return clauses[0];
+		// "a, b and c" — the last pair joined by the conjunction.
+		return `${clauses.slice(0, -1).join(', ')} ${NR.reasonAnd} ${clauses[clauses.length - 1]}`;
 	}
 
-	// The bar is hidden by an error, and by the grouped state — a grouped answer
-	// is one screen, so neither the page numbers nor the items-per-page control
-	// describes anything on it. Both conditions are re-evaluated here so the two
-	// cannot fight: leaving the grouped state must not un-hide an errored bar,
-	// and a successful grouped fetch must not un-hide it at all.
-	function syncPaginationBar(errored: boolean): void {
-		if (!paginationBar) return;
-		paginationBar.hidden = errored || isGrouped();
+	function showNoResults(show: boolean): void {
+		noResults!.hidden = !show;
+		if (!show) return;
+		resultsContainer!.replaceChildren();
+		if (noResultsReason) {
+			const summary = activeNarrowingSummary();
+			noResultsReason.textContent = summary
+				? `${NR.reasonPrefix} ${summary}`
+				: NR.subtitle;
+		}
 	}
 
 	function showFetchError(show: boolean): void {
@@ -309,32 +317,38 @@ export function setupDynamicSearch(): void {
 		if (show) {
 			resultsContainer!.replaceChildren();
 			noResults!.hidden = true;
+			// Hide the whole bar (nav + per-page) on error; the success path
+			// re-shows it and updatePagination re-applies the single-page rule.
+			if (paginationBar) paginationBar.hidden = true;
+		} else if (paginationBar) {
+			paginationBar.hidden = false;
 		}
-		syncPaginationBar(show);
 	}
 
 	// --- URL state sync ---------------------------------------------------
+
+	// The active selection as `[param, value]` pairs, shared by the URL sync and
+	// the API query so the two can never drift. An `itemType` selection is kept
+	// only where the facet exists; elsewhere it would collide with the `type`
+	// a pinned page already sends from `data-item-type`.
+	function activeFilterParams(): Array<[string, string]> {
+		const pairs: Array<[string, string]> = [];
+		for (const [key, values] of Object.entries(filters)) {
+			if (values.length === 0) continue;
+			if (key === 'itemType' && !hasItemTypeFacet) continue;
+			pairs.push([filterParamName(key, itemType), values.join(',')]);
+		}
+		return pairs;
+	}
 
 	function syncUrl(): void {
 		const params = new URLSearchParams();
 		const trimmed = searchText.trim();
 		if (trimmed) params.set('q', trimmed);
-		// `sortId` is what the visitor chose, never the relevance the field implied:
-		// `?q=…` already says the answer is ranked by relevance, and writing it
-		// down would freeze it into a link that outlives the text it ranked.
 		if (sortId !== DEFAULT_IOT_HUB_SORT_ID) params.set('sort', sortId);
-		// Keeps a section drill-down shareable and reloadable as itself.
-		if (urlItemType) params.set('type', urlItemType);
-		// A grouped answer has no pages and no page size — writing either would
-		// promise a state the surface cannot restore.
-		if (!isGrouped()) {
-			if (currentPage > 1) params.set('page', String(currentPage));
-			if (pageSize !== initialPageSize) params.set('pageSize', String(pageSize));
-		}
-		for (const [key, values] of Object.entries(filters)) {
-			if (values.length === 0) continue;
-			params.set(filterParamName(key, typeFilter()), values.join(','));
-		}
+		if (currentPage > 1) params.set('page', String(currentPage));
+		if (pageSize !== initialPageSize) params.set('pageSize', String(pageSize));
+		for (const [param, value] of activeFilterParams()) params.set(param, value);
 		const query = params.toString();
 		const next = basePath + (query ? `?${query}` : '') + location.hash;
 		if (next !== location.pathname + location.search + location.hash) {
@@ -358,6 +372,19 @@ export function setupDynamicSearch(): void {
 		const optText = target.querySelector<HTMLElement>('.iot-hub-sort__option-text')?.textContent;
 		if (labelEl && optText) labelEl.textContent = optText;
 		sortRoot.dataset.sortId = id;
+	}
+
+	/**
+	 * The sort the request and the sort control must both use. Text in the field
+	 * implies relevance — that is the only thing there is to rank an answer by —
+	 * while an empty field has nothing to be relevant to, and the backend would
+	 * substitute the install count anyway. Derived rather than stored, so clearing
+	 * the field gives the visitor their own choice back instead of stranding them
+	 * on a relevance sort with nothing to rank.
+	 */
+	function effectiveSortId(): string {
+		if (sortChosenByUser || !searchText.trim()) return sortId;
+		return 'most-relevant';
 	}
 
 	function applyPageSizeToUi(size: number): void {
@@ -387,56 +414,6 @@ export function setupDynamicSearch(): void {
 		return card;
 	}
 
-	// The grid element itself is built here rather than cloned: ListingGrid's
-	// styles are `is:global`, so a runtime-created div with the same classes is
-	// styled identically. Only the cards and the section shell carry scoped
-	// styles, and both of those are cloned from templates.
-	function buildGrid(items: ListingView[], pinnedSlug: string | null): HTMLElement {
-		const gridVariant = itemType ? getCardVariant(itemType) : 'big';
-		const grid = document.createElement('div');
-		grid.className = `iot-hub-grid iot-hub-grid--${gridVariant}`;
-		for (const item of items) {
-			// Pinned page: one category slug for every card. Mixed page (search /
-			// creator): resolved per item, skipping types with no public category
-			// rather than emitting a `/iot-hub//slug/` href.
-			const slug = pinnedSlug ?? getCategoryForItemType(item.itemType)?.slug;
-			if (!slug) continue;
-			grid.appendChild(buildCardNode(item, slug));
-		}
-		return grid;
-	}
-
-	function renderFlat(items: ListingView[]): void {
-		const cat = itemType ? getCategoryForItemType(itemType) : null;
-		const grid = buildGrid(items, cat ? cat.slug : null);
-		if (!grid.childElementCount) {
-			showNoResults(true);
-			return;
-		}
-		resultsContainer!.appendChild(grid);
-	}
-
-	// One [data-grouped-section] per type the answer contains, in
-	// IOT_HUB_TYPE_ORDER, each cloned from the section template and filled by
-	// bindGroupedSection. The "+N more" arithmetic and the header's href (which
-	// stays on the creator profile when there is a creatorId) belong to
-	// toGroupedSections — this only renders what it returns.
-	function renderSections(items: ListingView[]): void {
-		const sections = toGroupedSections(items, { query: searchText, creatorId });
-		for (const section of sections) {
-			const grid = buildGrid(section.items, null);
-			// Every row of the section was dropped by getKnownSlugs (or has no
-			// public category): an empty section under a populated header is worse
-			// than no section.
-			if (!grid.childElementCount) continue;
-			const node = sectionTemplate!.content.firstElementChild!.cloneNode(true) as HTMLElement;
-			bindGroupedSection(node, section);
-			node.appendChild(grid);
-			resultsContainer!.appendChild(node);
-		}
-		if (!resultsContainer!.childElementCount) showNoResults(true);
-	}
-
 	function renderResults(items: ListingView[]): void {
 		if (items.length === 0) {
 			showNoResults(true);
@@ -444,17 +421,34 @@ export function setupDynamicSearch(): void {
 		}
 		showNoResults(false);
 		resultsContainer!.replaceChildren();
-		if (isGrouped()) renderSections(items);
-		else renderFlat(items);
+
+		// Pinned page: one category slug for every card. Mixed page (search /
+		// creator): resolved per item below, skipping types with no public category
+		// rather than emitting a `/iot-hub//slug/` href.
+		const cat = itemType ? getCategoryForItemType(itemType) : null;
+
+		const gridVariant = itemType ? getCardVariant(itemType) : 'big';
+		const grid = document.createElement('div');
+		grid.className = `iot-hub-grid iot-hub-grid--${gridVariant}`;
+
+		for (const item of items) {
+			const slug = cat ? cat.slug : getCategoryForItemType(item.itemType)?.slug;
+			if (!slug) continue;
+			grid.appendChild(buildCardNode(item, slug));
+		}
+
+		if (!grid.childElementCount) {
+			showNoResults(true);
+			return;
+		}
+		resultsContainer!.appendChild(grid);
 	}
 
 	// --- Fetch -------------------------------------------------------------
 
 	async function refetch(opts: { resetPage?: boolean } = {}): Promise<void> {
 		lastRefetchOpts = opts;
-		const grouped = isGrouped();
-		// A grouped answer is one screen; there is no page index to keep.
-		if (opts.resetPage || grouped) currentPage = 1;
+		if (opts.resetPage) currentPage = 1;
 		syncUrl();
 		if (abort) abort.abort();
 		abort = new AbortController();
@@ -463,30 +457,18 @@ export function setupDynamicSearch(): void {
 		// loading overlay still runs on top so the user sees that the
 		// request is in flight.
 		setLoading(true);
-		// One resolution of the sort for both the request and the control, so the
-		// label and the ordering cannot tell different stories.
-		const activeSortId = effectiveSortId();
-		applySortToUi(activeSortId);
-		const sort = getIotHubSortOption(activeSortId);
+		const sort = getIotHubSortOption(effectiveSortId());
 		const params = new URLSearchParams({
+			pageSize: String(pageSize),
 			page: String(currentPage - 1), // backend is 0-based
 			sortProperty: sort.sortProperty,
 			sortOrder: sort.sortOrder,
 		});
-		// No pageSize on a grouped request: the server sizes the answer itself
-		// (one cap per item type), and a client-side number here would be a second
-		// source of truth about its shape — and a thing to forget when a type is
-		// added. It is what made sections vanish in the first place.
-		if (grouped) params.set('grouped', 'true');
-		else params.set('pageSize', String(pageSize));
 		const trimmed = searchText.trim();
 		if (trimmed) params.set('textSearch', trimmed);
 		if (creatorId) params.set('creatorId', creatorId);
-		if (typeFilter()) params.set('type', typeFilter());
-		for (const [key, values] of Object.entries(filters)) {
-			if (values.length === 0) continue;
-			params.set(filterParamName(key, typeFilter()), values.join(','));
-		}
+		if (itemType) params.set('type', itemType);
+		for (const [param, value] of activeFilterParams()) params.set(param, value);
 
 		try {
 			const [res, knownSlugs] = await Promise.all([
@@ -503,16 +485,23 @@ export function setupDynamicSearch(): void {
 				return;
 			}
 			const body = (await res.json()) as PageData<ListingView>;
-			// Drop listings published after the last deploy — no static
-			// detail page exists for them yet. Trade-off: a page may show
-			// < pageSize items until the next rebuild.
-			const items = (body.data ?? []).filter((item) => knownSlugs.has(item.slug));
+			// Drop listings with no static detail page to click through to:
+			// ones published after the last deploy (absent from the slug
+			// manifest), and numeric slugs, which `[category]/[slug].astro`
+			// excludes but the manifest still lists — without this the card
+			// would link to `/iot-hub/devices/2/`, page 2 of the listing.
+			// Same rule `getStaticPaths` applies, so the static first render
+			// and every refetch agree. Trade-off: a page may show < pageSize
+			// items until the next rebuild.
+			const items = (body.data ?? []).filter(
+				(item) => knownSlugs.has(item.slug) && !isNumericSlug(item.slug)
+			);
 			const totalPages = Math.max(1, body.totalPages || 1);
 			// Only a successful response is allowed to take the error
 			// panel down — every other refetch trigger leaves it alone.
 			showFetchError(false);
 			renderResults(items);
-			if (paginationNav && !grouped) {
+			if (paginationNav) {
 				// Hide the page-number nav when a filter narrows results to a
 				// single page, matching the other surfaces. Safe here because the
 				// per-page selector lives in the bar (sibling of the nav), so it
@@ -546,22 +535,15 @@ export function setupDynamicSearch(): void {
 	const urlSort = urlParams.get('sort') ?? '';
 	if (urlSort && getIotHubSortOption(urlSort).id === urlSort) {
 		sortId = urlSort;
-		// A sort in the URL is a choice the visitor made earlier — typing does not
-		// get to overrule it any more than it would in the same session.
+		// An explicit `?sort=` in the URL is the visitor's own choice, shared or
+		// bookmarked. The field must not override it.
 		sortChosenByUser = true;
-		applySortToUi(sortId);
 		if (urlSort !== DEFAULT_IOT_HUB_SORT_ID) hasUrlState = true;
 	}
-
-	// `?type=` only means anything on a grouped surface with no pinned type: it is
-	// how a section header drills into one type without leaving the page (the
-	// creator profile's "Widgets ›" must stay on the profile). An unknown value is
-	// ignored rather than silently ungrouping the page.
-	const urlType = urlParams.get('type') ?? '';
-	if (sectionTemplate && urlType && getCategoryForItemType(urlType)) {
-		urlItemType = urlType;
-		hasUrlState = true;
-	}
+	// After both `q` and `sort` are read, so landing on `?q=temperature` opens on
+	// "Most Relevant" and `?q=temperature&sort=most-installed` opens on the sort
+	// that was shared.
+	applySortToUi(effectiveSortId());
 
 	const urlPageSize = Number.parseInt(urlParams.get('pageSize') ?? '', 10);
 	if (Number.isFinite(urlPageSize) && urlPageSize > 0) {
@@ -577,6 +559,8 @@ export function setupDynamicSearch(): void {
 	}
 
 	for (const paramName of FILTER_PARAM_NAMES) {
+		// Only the catalogue can show `type` back to the visitor as a filter.
+		if (paramName === 'type' && !hasItemTypeFacet) continue;
 		const value = urlParams.get(paramName);
 		if (!value) continue;
 		const key = PARAM_TO_FILTER_KEY[paramName];
@@ -620,6 +604,9 @@ export function setupDynamicSearch(): void {
 
 	root.addEventListener('iot-hub-search-text:change', ((e: CustomEvent) => {
 		searchText = e.detail?.searchText ?? '';
+		// The label has to follow the field: typing implies relevance, emptying
+		// hands the visitor's own choice back.
+		applySortToUi(effectiveSortId());
 		if (debounceTimer !== undefined) clearTimeout(debounceTimer);
 		// setLoading kept inside refetch so the spinner only flashes once
 		// the fetch is actually in flight, not on every keystroke.
@@ -630,8 +617,6 @@ export function setupDynamicSearch(): void {
 
 	root.addEventListener('iot-hub-sort:change', ((e: CustomEvent) => {
 		sortId = e.detail?.id ?? DEFAULT_IOT_HUB_SORT_ID;
-		// From here on the visitor owns the sort: typing no longer switches the
-		// control to "Most relevant" behind their back.
 		sortChosenByUser = true;
 		void refetch({ resetPage: true });
 	}) as EventListener);
@@ -676,9 +661,16 @@ export function setupDynamicSearch(): void {
 			Array<{ value: string; label: string }>
 		>;
 		const next: Record<string, string[]> = {};
+		const nextLabels: Record<string, string[]> = {};
 		for (const [key, entries] of Object.entries(incoming)) {
-			if (entries.length > 0) next[key] = entries.map((entry) => entry.value);
+			if (entries.length === 0) continue;
+			next[key] = entries.map((entry) => entry.value);
+			nextLabels[key] = entries.map((entry) => entry.label);
 		}
+		// Labels are display-only, so they are refreshed even when the values
+		// match what the URL restore already reconstructed — that synthetic
+		// emit is exactly where the missing labels arrive.
+		filterLabels = nextLabels;
 		if (filtersEqual(filters, next)) return;
 		filters = next;
 		void refetch({ resetPage: true });

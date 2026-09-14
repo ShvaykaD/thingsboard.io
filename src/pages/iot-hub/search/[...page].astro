@@ -2,17 +2,21 @@
 import type { GetStaticPaths } from 'astro';
 import { getCollection } from 'astro:content';
 import {
-	GROUPED_SECTION_SIZE,
 	IOT_HUB_CATEGORIES,
 	IOT_HUB_STRINGS,
+	SEARCH_PAGE_SIZE,
+	buildItemTypeFacet,
 	isNumericSlug,
-	type IotHubItemType,
-	type ListingView,
+	mergeFilterInfo,
+	type FilterParamInfo,
+	type GridEntry,
+	type ItemTypeFilterInfo,
+	type ItemTypeTotals,
 } from '@models/iot-hub';
 import BaseLayout from '@layouts/BaseLayout.astro';
-import GroupedResultsPanel from '@components/IotHub/GroupedResultsPanel.astro';
-import { toSections } from '@components/IotHub/iot-hub-grouping';
-import type { GroupedSection } from '@components/IotHub/iot-hub-grouping';
+import FilterPanel from '@components/IotHub/FilterPanel.astro';
+import FilterBackdrop from '@components/IotHub/FilterBackdrop.astro';
+import FlatResultsPanel from '@components/IotHub/FlatResultsPanel.astro';
 import Breadcrumbs from '@components/Breadcrumbs.astro';
 import IotHubRuntimeConfig from '@components/IotHub/IotHubRuntimeConfig.astro';
 import SearchFilterBar from '@components/IotHub/SearchFilterBar.astro';
@@ -20,60 +24,93 @@ import { recordSitemapLastmod } from '@util/sitemap-lastmod';
 
 const T = IOT_HUB_STRINGS.searchPage;
 
-// One route. The grouped answer is one screen — the way to more of one type is
-// the section header, not a second page — so the old `/iot-hub/search/2/`…
-// pages are gone. They were indexed, so they are redirected here from
-// src/data/redirects.ts (DYNAMIC_REDIRECTS, "IoT Hub — search pagination").
 export const getStaticPaths = (async () => {
 	const categories = await getCollection('iotHubCategories');
 	const byId = new Map(categories.map((c) => [c.id, c.data]));
 
-	const byType = new Map<IotHubItemType, ListingView[]>();
-	let total = 0;
+	const allItems: GridEntry[] = [];
+	// Counted from the items this page can actually show, not from the API's
+	// totals, which include the numeric slugs skipped below. Nothing renders
+	// these numbers; `totalItems` only decides whether a type gets a checkbox
+	// at all, and a type whose every item was skipped should not get one.
+	const totalsByItemType = new Map<string, ItemTypeTotals>();
 	for (const cat of IOT_HUB_CATEGORIES) {
-		const items = (byId.get(cat.slug)?.items ?? []).filter((item) => !isNumericSlug(item.slug));
-		if (items.length === 0) continue;
-		byType.set(cat.itemType, items);
-		total += items.length;
+		const items = byId.get(cat.slug)?.items ?? [];
+		for (const item of items) {
+			if (isNumericSlug(item.slug)) continue;
+			allItems.push({ item, categorySlug: cat.slug });
+			const totals = totalsByItemType.get(cat.itemType) ?? { items: 0, installs: 0 };
+			totals.items += 1;
+			totals.installs += item.installCount ?? 0;
+			totalsByItemType.set(cat.itemType, totals);
+		}
 	}
+	// Match the backend's order for `?sortProperty=installCount&sortOrder=DESC`
+	// — installCount DESC, then createdTime DESC as tie-break — so the static
+	// build and runtime refetches surface items in the same order.
+	allItems.sort((a, b) => {
+		const ic = (b.item.installCount ?? 0) - (a.item.installCount ?? 0);
+		if (ic !== 0) return ic;
+		return (b.item.createdTime ?? 0) - (a.item.createdTime ?? 0);
+	});
 
-	// Match the backend's order for
-	// `?sortProperty=installCount&sortOrder=DESC&grouped=true` — installCount
-	// DESC, then createdTime DESC as tie-break, capped per type — so the static
-	// build and the first runtime refetch surface the same items in the same
-	// order. Section order, labels, "+N more" and hrefs come from toSections,
-	// the same code the runtime renderer uses.
-	const sections = toSections(
-		[...byType].map(([itemType, items]) => {
-			const ranked = [...items].sort((a, b) => {
-				const ic = (b.installCount ?? 0) - (a.installCount ?? 0);
-				if (ic !== 0) return ic;
-				return (b.createdTime ?? 0) - (a.createdTime ?? 0);
-			});
-			return { itemType, items: ranked.slice(0, GROUPED_SECTION_SIZE), total: ranked.length };
-		})
+	// This page mixes every item type, so its Category / Use Case facets are
+	// the union of the per-type ones the API serves.
+	const filterInfo = mergeFilterInfo(
+		IOT_HUB_CATEGORIES.map((cat) => byId.get(cat.slug)?.filterInfo).filter(
+			(info): info is ItemTypeFilterInfo => !!info
+		)
 	);
+	const itemTypeOptions = buildItemTypeFacet(totalsByItemType);
 
-	return [{ params: { page: undefined }, props: { sections, total } }];
+	const total = allItems.length;
+	const totalPages = Math.max(1, Math.ceil(total / SEARCH_PAGE_SIZE));
+
+	return Array.from({ length: totalPages }, (_, i) => {
+		const currentPage = i + 1;
+		// Each item keeps the slug of the collection it was loaded from, which is
+		// authoritative for the card's href.
+		const items = allItems.slice(i * SEARCH_PAGE_SIZE, currentPage * SEARCH_PAGE_SIZE);
+		return {
+			params: { page: currentPage === 1 ? undefined : String(currentPage) },
+			props: { items, currentPage, totalPages, total, filterInfo, itemTypeOptions },
+		};
+	});
 }) satisfies GetStaticPaths;
 
 interface Props {
-	sections: GroupedSection[];
+	items: GridEntry[];
+	currentPage: number;
+	totalPages: number;
 	total: number;
+	filterInfo: ItemTypeFilterInfo;
+	itemTypeOptions: FilterParamInfo[];
 }
 
-const { sections, total } = Astro.props as Props;
+const { items, currentPage, totalPages, total, filterInfo, itemTypeOptions } =
+	Astro.props as Props;
 const searchText = '';
+const basePath = '/iot-hub/search/';
 
 // <lastmod> from the newest listing `updatedTime` on this page.
 recordSitemapLastmod(
 	Astro.url.pathname,
-	sections.flatMap((section) => section.items.map((item) => item.updatedTime))
+	items.map((entry) => entry.item.updatedTime)
 );
 
-const title = 'Search | IoT Hub | ThingsBoard';
-const description =
-	'Search the ThingsBoard IoT Hub catalogue of devices, widgets, rule chains and more.';
+// Distinct title/description on pages 2+ to avoid duplicate metadata.
+const isFirstPage = currentPage === 1;
+// The page names itself for what it is with no query — the whole catalogue,
+// narrowable in place — rather than for the search box it happens to carry.
+// Same string as the crumb, the <h1> and the OG card, so the four can't drift.
+const title = isFirstPage
+	? `${T.catalogueName} | IoT Hub | ThingsBoard`
+	: `${T.catalogueName} | Page ${currentPage} | IoT Hub | ThingsBoard`;
+const baseDescription =
+	'Browse the full ThingsBoard IoT Hub catalogue — devices, widgets, rule chains, ' +
+	'calculated fields, alarm rules and solution templates. Filter by type, category ' +
+	'and use case.';
+const description = isFirstPage ? baseDescription : `${baseDescription} (page ${currentPage})`;
 ---
 
 <BaseLayout title={title} description={description}>
@@ -81,7 +118,8 @@ const description =
 		class="iot-hub-search"
 		data-iot-hub-search-root
 		data-base-path="/iot-hub/search/"
-		data-grouped
+		data-back-label={T.catalogueName}
+		data-page-size={SEARCH_PAGE_SIZE}
 	>
 		<div class="iot-hub-search__center">
 			<div class="iot-hub-search__container">
@@ -89,21 +127,42 @@ const description =
 					<Breadcrumbs
 						items={[
 							{ label: T.breadcrumbRoot, href: '/iot-hub/' },
-							{ label: T.breadcrumbCurrent },
+							{ label: T.catalogueName },
 						]}
 					/>
 				</div>
-				<div class="iot-hub-search__items" data-search-items>
-					<SearchFilterBar
-						headingAs="h1"
-						heading={T.headingEmpty}
-						headingPrefix={T.headingPrefix}
-						searchText={searchText}
-						searchPlaceholder={T.searchPlaceholder}
-						totalResults={total}
-						showRelevance
+				<div
+					class="iot-hub-search__listings-wrap"
+					data-iot-hub-listings-wrap
+					data-filter-open="false"
+				>
+					<FilterPanel
+						itemType={null}
+						filterInfo={filterInfo}
+						itemTypeOptions={itemTypeOptions}
 					/>
-					<GroupedResultsPanel sections={sections} titleAs="h2" />
+					<FilterBackdrop />
+					<div class="iot-hub-search__items" data-search-items>
+						<SearchFilterBar
+							headingAs="h1"
+							heading={T.catalogueName}
+							headingPrefix={T.headingPrefix}
+							searchText={searchText}
+							searchPlaceholder={T.searchPlaceholder}
+							totalResults={total}
+							showFilters
+							showRelevance
+						/>
+						<FlatResultsPanel
+							items={items}
+							currentPage={currentPage}
+							totalPages={totalPages}
+							basePath={basePath}
+							perPage={SEARCH_PAGE_SIZE}
+							titleAs="h2"
+							clearHref={basePath}
+						/>
+					</div>
 				</div>
 			</div>
 		</div>
@@ -135,13 +194,23 @@ const description =
 		}
 	}
 
+	.iot-hub-search__listings-wrap {
+		@include iot-hub-filter-row;
+	}
+
 	.iot-hub-search__items {
 		@include iot-hub-listing-column;
+		// Sits beside the filter panel, so it also needs to flex within that row.
+		flex: 1 1 0;
+		min-width: 0;
 	}
 
 </style>
 
 <script>
 	import { initDynamicSearch } from '@components/IotHub/iot-hub-dynamic-search';
+	import { initFilterDrawer } from '@components/IotHub/iot-hub-filter-drawer';
+
 	initDynamicSearch();
+	initFilterDrawer();
 </script>

@@ -710,9 +710,9 @@ const highlights = [
 	// sizes the answer itself, so a number here would be a second source of
 	// truth about its shape, and a thing to forget when a type is added.
 	//
-	// Grouping is toGroupedSections() — the same function the search page and
-	// the creator profile render from, so the three surfaces cannot lay the same
-	// answer out differently.
+	// Grouping is toGroupedSections(). The popup is now the ONLY surface that
+	// groups: /iot-hub/search/ and the creator profile stay flat and paginated,
+	// so that a filtered, shareable catalogue keeps its page URLs.
 	//
 	// Result cards are cloned from <IotHubListingLinkTemplate variant="row" />
 	// and bound via bindListingLink(), so the popup shares its visual

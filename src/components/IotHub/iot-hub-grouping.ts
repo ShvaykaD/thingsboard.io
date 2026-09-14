@@ -78,10 +78,12 @@ export interface SectionGroup {
  * Section order, labels, "+N more" arithmetic and header hrefs — the half of
  * grouping that does not care where the rows came from.
  *
- * `toGroupedSections` feeds it a runtime `grouped=true` response; the statically
- * built search page and creator profile feed it the content collections, where
- * each type's real total is known outright and no `typeTotal` exists to read.
- * Both paths must lay out identically, so neither gets to own this arithmetic.
+ * The hero popup is the only caller: `toGroupedSections` feeds it a runtime
+ * `grouped=true` response. `/iot-hub/search/` and the creator profile stayed
+ * flat and paginated — a filtered catalogue with shareable page URLs — so the
+ * statically built path this also served is gone. Kept split from
+ * `toGroupedSections` anyway: the arithmetic is the part a second surface would
+ * have to reuse rather than re-derive.
  */
 export function toSections(
 	groups: ReadonlyArray<SectionGroup>,

@@ -1430,8 +1430,8 @@ export const NON_DOCS_REDIRECTS: Record<string, string> = {
 	'/blog/tbmq-2-3-external-authentication-bulk-provisioning-and-enterprise-audit-trails/': `${TBMQ_ORIGIN}/blog/tbmq-2-3-external-authentication-bulk-provisioning-and-enterprise-audit-trails/`,
 
 	// Trendz
-	'/products/trendz/trndz-request-demo/': '/products/trendz/request-demo/',
-	'/images/trendz/trndz-request-demo/': '/products/trendz/request-demo/',
+	'/products/trendz/trndz-request-demo/': '/products/trendz/',
+	'/products/trendz/request-demo/': '/products/trendz/',
 
 	// PaaS
 	'/products/paas/billing-info/': '/docs/paas/user-guide/billing-info/',
@@ -1604,20 +1604,6 @@ export const DYNAMIC_REDIRECTS: DynamicRedirectGroup[] = [
 				source: '/docs/pe/user-guide/releases-table/*',
 				target: '/docs/pe/releases/releases-table/:splat',
 			},
-		],
-	},
-	{
-		comment:
-			'IoT Hub — search & creator-profile pagination. Both surfaces now answer ' +
-			'with one grouped screen (four of each item type, the section header the ' +
-			'way into the rest), so their /2/, /3/… pages are no longer built. They ' +
-			'were indexed, so each numbered page folds back into the surface it came ' +
-			'from. Each placeholder matches exactly one segment, and nothing else ' +
-			'lives at that depth under either prefix — a creator id is its own ' +
-			'segment, and the profile itself is one segment shorter.',
-		entries: [
-			{ source: '/iot-hub/search/:page/', target: '/iot-hub/search/' },
-			{ source: '/iot-hub/creator/:id/:page/', target: '/iot-hub/creator/:id/' },
 		],
 	},
 	{
