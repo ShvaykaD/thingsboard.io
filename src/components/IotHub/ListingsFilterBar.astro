@@ -8,6 +8,9 @@ interface Props {
 	totalCount: number;
 	searchText?: string;
 	searchPlaceholder?: string;
+	/** Forwarded to IotHubSort — see its `showRelevance` prop. Set on surfaces
+	 *  that carry a search field, which is the only thing relevance ranks by. */
+	showRelevance?: boolean;
 }
 
 const T = IOT_HUB_STRINGS.listingsBar;
@@ -15,6 +18,7 @@ const {
 	totalCount,
 	searchText = '',
 	searchPlaceholder = T.defaultSearchPlaceholder,
+	showRelevance = false,
 } = Astro.props;
 ---
 
@@ -54,7 +58,7 @@ const {
 			{totalCount} {totalCount === 1 ? T.resultSingular : T.resultPlural}
 		</p>
 		<FilterChips />
-		<IotHubSort />
+		<IotHubSort showRelevance={showRelevance} />
 	</div>
 </div>
 
