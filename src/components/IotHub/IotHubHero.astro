@@ -105,7 +105,7 @@ const highlights = [
 					data-popup-footer
 				>
 					{/* Reworded per state by updateFooter() below; the field starts empty. */}
-					See most installed
+					See all items
 				</a>
 			</div>
 		</form>
@@ -869,10 +869,14 @@ const highlights = [
 
 		function updateFooter(q: string): void {
 			const trimmed = q.trim();
-			// Empty field: the popup is showing the catalogue, so the footer offers
-			// the catalogue. With text: it offers the same query on a surface that
-			// can show more of it.
-			footer!.textContent = trimmed ? `See results for "${trimmed}"` : 'See most installed';
+			// Empty field: the popup is showing the catalogue, so the footer offers the
+			// catalogue — named the way the destination names itself ("All items"), not
+			// by an ordering. It used to read "See most installed", which was true only
+			// while that page defaulted to the install count; it defaults to relevance
+			// now, so the footer would have been promising an order the page's own
+			// control contradicts. With text: the same query on a surface that can show
+			// more of it.
+			footer!.textContent = trimmed ? `See results for "${trimmed}"` : 'See all items';
 			footer!.href = buildSearchUrl(q);
 		}
 
