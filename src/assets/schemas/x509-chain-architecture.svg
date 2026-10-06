@@ -1,0 +1,61 @@
+<svg xmlns="http://www.w3.org/2000/svg" width="720" height="650" viewBox="0 0 720 650" font-family="Roboto, Helvetica, Arial, sans-serif">
+  <title>X.509 certificate chain provisioning: how a device gets and uses its certificate</title>
+  <defs>
+    <pattern id="dots" width="14" height="14" patternUnits="userSpaceOnUse">
+      <circle cx="1" cy="1" r="1" fill="#c1c3c8" fill-opacity="0.5"></circle>
+    </pattern>
+  </defs>
+  <rect width="720" height="650" fill="#ffffff"></rect>
+  <rect width="720" height="650" fill="url(#dots)"></rect>
+
+  <line x1="100" y1="63" x2="100" y2="640" stroke="#555962" stroke-width="1"></line>
+  <line x1="400" y1="63" x2="400" y2="420" stroke="#555962" stroke-width="1"></line>
+  <line x1="635" y1="63" x2="635" y2="640" stroke="#3d50f5" stroke-width="1"></line>
+
+  <rect x="20.5" y="14.5" width="160" height="48" rx="9.5" fill="#edeef3" stroke="#555962"></rect>
+  <text x="100" y="44" text-anchor="middle" font-size="15" font-weight="600" fill="#17181c">Device</text>
+  <rect x="320.5" y="14.5" width="160" height="48" rx="9.5" fill="#edeef3" stroke="#555962"></rect>
+  <text x="400" y="44" text-anchor="middle" font-size="15" font-weight="600" fill="#17181c">Your PKI</text>
+  <rect x="560.5" y="14.5" width="150" height="48" rx="9.5" fill="#cfd4fc" stroke="#3d50f5"></rect>
+  <text x="635" y="44" text-anchor="middle" font-size="15" font-weight="600" fill="#17181c">ThingsBoard</text>
+
+  <text x="517" y="95" text-anchor="middle" font-size="13" font-weight="500" fill="#17181c">0. Intermediate CA certificate</text>
+  <line x1="400" y1="105" x2="625" y2="105" stroke="#3d50f5" stroke-width="1.2"></line>
+  <polygon points="625,100 635,105 625,110" fill="#3d50f5"></polygon>
+  <text x="517" y="124" text-anchor="middle" font-size="12" fill="#555962">registered on the device profile, once</text>
+
+  <rect x="93" y="150" width="14" height="36" rx="4" fill="#edeef3" stroke="#555962"></rect>
+  <text x="117" y="164" font-size="13" font-weight="500" fill="#17181c">1. Generate a key pair</text>
+  <text x="117" y="182" font-size="12" fill="#555962">the private key never leaves the device</text>
+
+  <text x="250" y="235" text-anchor="middle" font-size="13" font-weight="500" fill="#17181c">2. Certificate signing request (CSR)</text>
+  <line x1="100" y1="245" x2="390" y2="245" stroke="#555962" stroke-width="1.2"></line>
+  <polygon points="390,240 400,245 390,250" fill="#555962"></polygon>
+  <text x="250" y="264" text-anchor="middle" font-size="12" fill="#555962">public key + CN, signed with the private key;</text>
+  <text x="250" y="281" text-anchor="middle" font-size="12" fill="#555962">authenticated with the bootstrap credential</text>
+
+  <text x="250" y="315" text-anchor="middle" font-size="13" font-weight="500" fill="#17181c">3. Device certificate</text>
+  <line x1="110" y1="325" x2="400" y2="325" stroke="#555962" stroke-width="1.2"></line>
+  <polygon points="110,320 100,325 110,330" fill="#555962"></polygon>
+  <text x="250" y="344" text-anchor="middle" font-size="12" fill="#555962">public key + CN, signed by the intermediate CA</text>
+
+  <text x="250" y="385" text-anchor="middle" font-size="13" font-weight="500" fill="#17181c">4. Intermediate CA certificate</text>
+  <line x1="110" y1="395" x2="400" y2="395" stroke="#555962" stroke-width="1.2"></line>
+  <polygon points="110,390 100,395 110,400" fill="#555962"></polygon>
+  <text x="250" y="414" text-anchor="middle" font-size="12" fill="#555962">for example, EST /cacerts</text>
+
+  <rect x="20.5" y="440.5" width="300" height="72" rx="9.5" fill="#edeef3" stroke="#555962"></rect>
+  <text x="36" y="463" font-size="12" font-weight="600" fill="#17181c">The device now holds:</text>
+  <text x="36" y="482" font-size="12" fill="#555962">private key (generated in step 1),</text>
+  <text x="36" y="499" font-size="12" fill="#555962">device certificate, intermediate CA certificate</text>
+
+  <text x="370" y="535" text-anchor="middle" font-size="13" font-weight="500" fill="#17181c">5. MQTT over TLS, port 8883</text>
+  <line x1="100" y1="545" x2="625" y2="545" stroke="#3d50f5" stroke-width="1.2"></line>
+  <polygon points="625,540 635,545 625,550" fill="#3d50f5"></polygon>
+  <text x="370" y="564" text-anchor="middle" font-size="12" fill="#555962">presents the device certificate + intermediate CA certificate;</text>
+  <text x="370" y="581" text-anchor="middle" font-size="12" fill="#555962">the TLS handshake proves the device holds the private key</text>
+
+  <rect x="628" y="597" width="14" height="36" rx="4" fill="#cfd4fc" stroke="#3d50f5"></rect>
+  <text x="618" y="611" text-anchor="end" font-size="13" font-weight="500" fill="#17181c">6. Verifies the chain against the profile CA,</text>
+  <text x="618" y="629" text-anchor="end" font-size="12" fill="#0f1c8a">extracts the device name from the CN, binds the certificate</text>
+</svg>
