@@ -60,7 +60,7 @@ Mutual TLS must terminate at the ThingsBoard MQTT transport, so that the client 
 
 <Steps>
 1. Go to **Profiles &#8702; Device profiles**, open the profile your devices will use, and switch to the **Device provisioning** tab.
-2. Select the **X.509 Certificate Chain** strategy.
+2. Select the **X509 Certificates Chain** strategy.
 3. Fill in the fields described below and save the profile.
 </Steps>
 
@@ -160,6 +160,7 @@ To limit the impact of a leaked certificate:
 | Connection rejected on first connect; the device sends only its own certificate | The registered CA is not in the presented chain | Send the device certificate followed by the intermediate CA certificate |
 | Pre-registered device rejected with code 5 (*Not authorized*) | The device was created with access-token credentials | Change its credentials to X.509 with a placeholder value (**Manage credentials** on the device) |
 | Unknown device rejected although its certificate is signed by your CA | **Create new devices** is disabled and the device is not pre-registered | Pre-register the device, or enable **Create new devices** |
+| Pre-registered device rejected although its name matches | The device belongs to a different device profile | Move the device to the profile that holds the CA certificate |
 | Renewed certificate rejected | The CN changed, or the CA is missing from the chain | Keep the CN and send the full chain |
 | Saving the device profile fails | The CA certificate is already registered on another profile, or it is a well-known public root CA | Use a dedicated intermediate CA for this profile |
 | Code 2 (*Identifier rejected*) on connect | No client certificate reached ThingsBoard | Check that the device sends its certificate and, on a self-hosted installation, that TLS is not terminated before the ThingsBoard MQTT transport |
