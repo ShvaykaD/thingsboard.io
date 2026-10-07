@@ -127,9 +127,11 @@ Before the certificate expires, the device re-enrolls (for example with EST `/si
 
 ThingsBoard checks the validity period of the device certificate on every connection, so an expired certificate is rejected.
 
+This check can be turned off with `MQTT_SSL_SKIP_VALIDITY_CHECK_FOR_CLIENT_CERT=true` on the MQTT transport. Keep the default value, `false`: short certificate lifetimes are the main protection against leaked certificates, as described in [Revocation](#revocation).
+
 ## Revocation
 
-ThingsBoard verifies the signatures along the presented chain and the validity period of the device certificate, but it does not check certificate revocation lists (CRL) or OCSP. With X.509 Certificate Chain provisioning, there is currently no way to revoke an individual certificate while keeping the device's identity: any valid certificate issued by your CA whose CN resolves to an existing device is accepted for that device. Resetting the device's credentials does not help, because the certificate is bound again on its next connection.
+ThingsBoard verifies the signatures along the presented chain and the validity period of the device certificate, but it does not check certificate revocation lists (CRLs) or OCSP. With X.509 Certificate Chain provisioning, there is currently no way to revoke an individual certificate while keeping the device's identity: any valid certificate issued by your CA whose CN resolves to an existing device is accepted for that device. Resetting the device's credentials does not help, because the certificate is bound again on its next connection.
 
 <Aside type="note" title="Planned improvement">
   Blocking an individual certificate in ThingsBoard for this provisioning strategy is planned. This section will be updated when it becomes available; until then, use the mitigations below.
