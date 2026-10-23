@@ -3,7 +3,7 @@ import { Steps, Aside } from '@astrojs/starlight/components';
 
 ## Introduction
 
-This guide describes how to register a MOKO SMART LoRaWAN gateway and end devices in ThingsBoard using The Things Stack Community Edition (TTN) as the network server and a ThingsBoard MQTT integration to forward device data.
+This guide describes how to register a MOKO SMART LoRaWAN gateway and end devices in ThingsBoard using The Things Stack Sandbox Edition (TTN) as the network server and a ThingsBoard MQTT integration to forward device data.
 
 The guide applies to all MOKO SMART LoRaWAN end devices.
 
@@ -136,12 +136,12 @@ When registering the gateway, make sure the gateway and device frequency bands m
 ### Create integration in ThingsBoard
 
 <Steps>
-1. Go to **Integrations center** > **Integrations** and click **+** to add a new integration. Select **The Things Stack Community** as the type and click **Next**.
+1. Go to **Integrations center** > **Integrations** and click **+** to add a new integration. Select **The Things Stack Sandbox** as the type and click **Next**.
 
    <ImageGallery images={[{
      src: '/src/assets/devices-library/moko-smart/moko-smart-create-integration-in-thingsboard-1.png',
-     alt: 'Add integration dialog with The Things Stack Community selected',
-     caption: 'ThingsBoard Integrations: selecting The Things Stack Community type',
+     alt: 'Add integration dialog with The Things Stack Sandbox selected',
+     caption: 'ThingsBoard Integrations: selecting The Things Stack Sandbox type',
    }]} />
 
 2. Paste the following decoder into the **Uplink data converter** field and click **Next**.

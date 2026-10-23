@@ -5,15 +5,15 @@ import { Products } from '~/models/site.models';
 import Tabs from '@components/Tabs.astro';
 import TabItem from '@components/TabItem.astro';
 
-The <a href="https://www.thethingsindustries.com/" target="_blank" rel="noopener noreferrer nofollow"><strong>The Things Industries (TTI)</strong></a> integration connects ThingsBoard to a private The Things Stack Industries LoRaWAN network server. Use it when your LoRaWAN infrastructure runs on a private TTI tenant rather than the public The Things Network — for public TTN connectivity, see the <DocLink product={props.product} path="user-guide/integrations/ttn" target="_blank">The Things Stack Community integration</DocLink>. Bring telemetry from LoRaWAN devices already registered in TTI into ThingsBoard for monitoring and rule-based automation — including sending commands back to those devices.
+The <a href="https://www.thethingsindustries.com/" target="_blank" rel="noopener noreferrer nofollow"><strong>The Things Industries (TTI)</strong></a> integration connects ThingsBoard to a private The Things Stack Cloud LoRaWAN network server. Use it when your LoRaWAN infrastructure runs on a private TTI tenant rather than the public The Things Network — for public TTN connectivity, see the <DocLink product={props.product} path="user-guide/integrations/ttn" target="_blank">The Things Stack Sandbox integration</DocLink>. Bring telemetry from LoRaWAN devices already registered in TTI into ThingsBoard for monitoring and rule-based automation — including sending commands back to those devices.
 
 ## Architecture
 
 <ImageGallery images={[
   {
     src: '/src/assets/images/user-guide/integrations/tti-integration-architecture.svg',
-    alt: 'The Things Stack Industries integration architecture diagram showing uplink data flowing from a LoRaWAN device through a private TTI tenant to the ThingsBoard uplink converter and Core Service over MQTT, and downlink commands flowing back through the downlink converter and the same MQTT connection',
-    caption: 'The Things Stack Industries integration architecture — uplink and downlink data flow between TTI and ThingsBoard over MQTT.',
+    alt: 'The Things Stack Cloud integration architecture diagram showing uplink data flowing from a LoRaWAN device through a private TTI tenant to the ThingsBoard uplink converter and Core Service over MQTT, and downlink commands flowing back through the downlink converter and the same MQTT connection',
+    caption: 'The Things Stack Cloud integration architecture — uplink and downlink data flow between TTI and ThingsBoard over MQTT.',
   },
 ]} />
 
@@ -28,7 +28,7 @@ Before creating the integration, ensure:
 - You have a <a href="https://www.thethingsindustries.com/" target="_blank" rel="noopener noreferrer nofollow"><strong>The Things Industries</strong></a> account with at least one registered application and device.
 - At least one device is registered in your TTI application and is sending uplinks. If you have not registered a device yet, follow the **[Register an End Device](#register-an-end-device)** step below.
 
-## Set Up The Things Stack Industries
+## Set Up The Things Stack Cloud
 
 ### Register an Application
 
@@ -144,7 +144,7 @@ TTI exposes an MQTT broker for each application. ThingsBoard uses the credential
 
 ## Set Up the Integration in ThingsBoard
 
-To set up **The Things Stack Industries** integration, first create an uplink data converter to process incoming messages, then create and configure the integration.
+To set up **The Things Stack Cloud** integration, first create an uplink data converter to process incoming messages, then create and configure the integration.
 
 ### Create the Uplink Data Converter
 
@@ -163,7 +163,7 @@ In the **Add data converter** dialog:
 <Steps>
   <ol start="3">
     <li><strong>Converter type</strong> — leave <strong>Uplink</strong> (selected by default).</li>
-    <li><strong>Integration type</strong> — in the search field, enter <code>The Things Stack Industries</code> and select <strong>The Things Stack Industries</strong> from the list.</li>
+    <li><strong>Integration type</strong> — in the search field, enter <code>The Things Stack Cloud</code> and select <strong>The Things Stack Cloud</strong> from the list.</li>
     <li><strong>Name</strong> — enter a converter name, for example <code>TTI Uplink Converter</code>.</li>
     <li>
       <span>Configure <DocLink product={props.product} path="user-guide/integrations/uplink-data-converter/#main-decoding-configuration" target="_blank">main decoding parameters</DocLink>:</span>
@@ -378,7 +378,7 @@ In the **Add data converter** dialog:
       </ul>
     </li>
     <li>
-      Review <DocLink product={props.product} path="user-guide/integrations/uplink-data-converter/#advanced-decoding-parameters" target="_blank">advanced decoding parameters</DocLink> — pre-populated for The Things Stack Industries; leave defaults unless your setup differs.
+      Review <DocLink product={props.product} path="user-guide/integrations/uplink-data-converter/#advanced-decoding-parameters" target="_blank">advanced decoding parameters</DocLink> — pre-populated for The Things Stack Cloud; leave defaults unless your setup differs.
 
       These parameters control **TTI network metadata** — signal quality, location, and LoRa settings that ThingsBoard extracts automatically from each uplink message. The decoder script controls **device sensor data** — the fields written to `result.attributes` and `result.telemetry.values`.
 
@@ -454,7 +454,7 @@ The decoder reads byte ranges using `parseBytesToInt(input, offset, length)` and
 - **TTI payload formatter configured** — if your TTI application has a JavaScript formatter, ThingsBoard receives the formatter's output as a JSON object (`payloadFormat == 'JSON'`). Update the `parsed.bytes` extraction to match your formatter's output structure, or map decoded fields directly: `values: { temperature: parsed.temperature }`.
 - **Additional attributes** — add more keys to `result.attributes` (e.g. `result.attributes.firmwareVersion = parsed.fw`).
 
-### Create The Things Stack Industries Integration
+### Create The Things Stack Cloud Integration
 
 <Steps>
   <ol start="1">
@@ -462,8 +462,8 @@ The decoder reads byte ranges using `parseBytesToInt(input, offset, length)` and
     <li>
       <span><strong>Basic settings:</strong></span>
       <ul>
-        <li>Set <strong>integration type</strong> to <strong>The Things Stack Industries</strong>.</li>
-        <li>Enter a <strong>Name</strong> for the integration, or keep the default <code>The Things Stack Industries integration</code>.</li>
+        <li>Set <strong>integration type</strong> to <strong>The Things Stack Cloud</strong>.</li>
+        <li>Enter a <strong>Name</strong> for the integration, or keep the default <code>The Things Stack Cloud integration</code>.</li>
         <li>Leave <strong>Enable integration</strong> and <strong>Allow create devices or assets</strong> on so the device is created automatically on first data.</li>
         <li>Click <strong>Next</strong>.</li>
       </ul>
@@ -594,7 +594,7 @@ This payload matches the byte layout from the uplink converter: `sn = 12345678`,
 
 ### Verify Integration Events
 
-Go to **Integrations &#8702; Integrations**, open **The Things Stack Industries integration**, and click the **Events** tab.
+Go to **Integrations &#8702; Integrations**, open **The Things Stack Cloud integration**, and click the **Events** tab.
 Each successfully processed uplink appears as a row with status **OK**.
 
 ### Verify Converter Events
@@ -643,7 +643,7 @@ For the full encoder function reference, see <DocLink product={props.product} pa
 Add the downlink converter to the existing integration:
 
 <Steps>
-  1. Go to **Integrations &#8702; Integrations** and open the **The Things Stack Industries integration**.
+  1. Go to **Integrations &#8702; Integrations** and open **The Things Stack Cloud integration**.
   2. Click the **pencil** icon to enter edit mode.
   3. In the **Downlink data converter** field, click **Create new**.
   4. In the **Add data converter** dialog:
@@ -821,7 +821,7 @@ Three rule nodes are needed: an **originator attributes** node that reads the de
   6. In the node panel, search for **integration downlink** and drag it onto the canvas.
   7. Configure the node:
       - **Name** — e.g. `Downlink to TTI`.
-      - **Integration** — select **The Things Stack Industries integration**.
+      - **Integration** — select **The Things Stack Cloud integration**.
       - Click **Add**.
   8. Connect the **message type switch** node to the **originator attributes** node using the **Post attributes** and **Attributes Updated** relations.
   9. Connect the **originator attributes** node to the **originator fields** node using the **Success** relation.
@@ -844,7 +844,7 @@ Trigger a downlink by adding a shared attribute to the ThingsBoard device provis
 
 <h4>Verify Integration Events</h4>
 
-Go to **Integrations &#8702; Integrations**, open the **The Things Stack Industries integration**, and click the **Events** tab.
+Go to **Integrations &#8702; Integrations**, open **The Things Stack Cloud integration**, and click the **Events** tab.
 
 A `Downlink` event with status `OK` confirms that ThingsBoard forwarded the message to **TTI Console**.
 
@@ -865,7 +865,7 @@ Go to the TTI console, open **End devices &#8702; thermostat-a** (or your device
 
 ## Troubleshooting
 
-This section covers the most common problems encountered when setting up and running the The Things Stack Industries integration. Each entry describes the symptom, the most likely cause, and the steps to resolve it.
+This section covers the most common problems encountered when setting up and running The Things Stack Cloud integration. Each entry describes the symptom, the most likely cause, and the steps to resolve it.
 
 <h4>No Uplinks Received</h4>
 
@@ -918,7 +918,7 @@ This section covers the most common problems encountered when setting up and run
 <h4>Inspect Debug Events</h4>
 
 <Steps>
-  1. Go to **Integrations &#8702; Integrations**, open **The Things Stack Industries integration**, and click the **Events** tab.
+  1. Go to **Integrations &#8702; Integrations**, open **The Things Stack Cloud integration**, and click the **Events** tab.
   2. Click an event row to inspect:
       - **In** — the raw MQTT message received from TTI before processing.
       - **Out** — what the converter returned: device name, attributes, and telemetry values passed to ThingsBoard.
@@ -935,7 +935,7 @@ Enable **Debug mode** on the integration to capture all raw input/output events.
 ## See Also
 
 - <DocLink product={props.product} path="user-guide/integrations" target="_blank">Integrations Overview</DocLink> — how ThingsBoard connects to external platforms and how uplink/downlink flow works
-- <DocLink product={props.product} path="user-guide/integrations/ttn" target="_blank">The Things Stack Community Integration</DocLink> — connect to the public The Things Network instead of a private The Things Industries tenant
+- <DocLink product={props.product} path="user-guide/integrations/ttn" target="_blank">The Things Stack Sandbox Integration</DocLink> — connect to the public The Things Network instead of a private The Things Industries tenant
 - <DocLink product={props.product} path="user-guide/integrations/uplink-data-converter" target="_blank">Uplink Data Converter</DocLink> — full decoder function reference: input parameters, output fields, and scripting patterns
 - <DocLink product={props.product} path="user-guide/integrations/downlink-data-converter" target="_blank">Downlink Data Converter</DocLink> — full encoder function reference: input parameters, output fields, and scripting patterns
 - <DocLink product={props.product} path="user-guide/integrations/remote" target="_blank">Remote Integration</DocLink> — run the integration outside the ThingsBoard server to reach TTI from a private network
